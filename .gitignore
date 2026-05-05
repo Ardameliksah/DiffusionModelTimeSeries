@@ -1,0 +1,9 @@
+output/
+dataset/
+__pycache__/
+*.pyc
+*.pth
+*.pt
+
+# Editor
+.vscode/
