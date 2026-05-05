@@ -4,7 +4,10 @@ Centralizes all hyperparameters: model architecture, diffusion process, and trai
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
+
+_ROOT = Path(__file__).parent.parent  # MyCode/
 
 
 @dataclass
@@ -47,8 +50,8 @@ class TrainingConfig:
     lr_scheduler_type: Literal["cosine", "linear"] = "cosine"
     
     # Checkpoint and logging
-    checkpoint_dir: str = "MyCode/output/checkpoints"
-    log_dir: str = "MyCode/output/logs"
+    checkpoint_dir: str = str(_ROOT / "output" / "checkpoints")
+    log_dir: str = str(_ROOT / "output" / "logs")
     save_every_n_epochs: int = 250
     validate_every_n_epochs: int = 10
 
@@ -60,13 +63,13 @@ class SamplingConfig:
     num_sampling_steps: int = 100  # For DDIM; DDPM uses full num_timesteps
     eta: float = 0.0  # Controls stochasticity in DDIM (0 = deterministic)
     batch_size: int = 16
-    output_dir: str = "MyCode/output/generated_samples"
+    output_dir: str = str(_ROOT / "output" / "generated_samples")
 
 
 @dataclass
 class DataConfig:
     """Data loading hyperparameters."""
-    data_path: str = "MyCode/dataset/stocks_data.csv"
+    data_path: str = str(_ROOT / "dataset" / "stocks_data.csv")
     train_split: float = 0.8
     val_split: float = 0.1
     test_split: float = 0.1

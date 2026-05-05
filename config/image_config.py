@@ -6,7 +6,10 @@ Based on ImagenTime approach: converts 1D sequences to 2D images before processi
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
+
+_ROOT = Path(__file__).parent.parent  # MyCode/
 
 
 @dataclass
@@ -79,8 +82,8 @@ class TrainingConfig:
     lr_scheduler_type: Literal["cosine", "linear"] = "cosine"
     
     # Checkpoint and logging
-    checkpoint_dir: str = "MyCode/output/checkpoints_image"  # ← Separate from raw version
-    log_dir: str = "MyCode/output/logs_image"  # ← Separate logs
+    checkpoint_dir: str = str(_ROOT / "output" / "checkpoints_image")
+    log_dir: str = str(_ROOT / "output" / "logs_image")
     save_every_n_epochs: int = 50
     validate_every_n_epochs: int = 10
 
@@ -92,13 +95,13 @@ class SamplingConfig:
     num_sampling_steps: int = 50
     eta: float = 0.0
     batch_size: int = 16
-    output_dir: str = "MyCode/output/generated_samples_image"  # ← Separate output
+    output_dir: str = str(_ROOT / "output" / "generated_samples_image")
 
 
 @dataclass
 class DataConfig:
     """Data loading hyperparameters."""
-    data_path: str = "MyCode/dataset/stocks_data.csv"
+    data_path: str = str(_ROOT / "dataset" / "stocks_data.csv")
     train_split: float = 0.8
     val_split: float = 0.1
     test_split: float = 0.1

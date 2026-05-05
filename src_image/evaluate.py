@@ -35,7 +35,7 @@ def evaluate(
     config.image.embedding_type = embedding
 
     if output_dir is None:
-        output_dir = f"MyCode/output/generated_samples_image_{embedding}"
+        output_dir = str(Path(__file__).parent.parent / "output" / f"generated_samples_image_{embedding}")
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)

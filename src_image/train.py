@@ -56,9 +56,9 @@ def train(
     else:
         h = config.model.hidden_dim
         l = config.model.num_layers
-        config.training.checkpoint_dir = f"MyCode/output/checkpoints_image_{embedding}_h{h}_l{l}"
+        config.training.checkpoint_dir = str(Path(__file__).parent.parent / "output" / f"checkpoints_image_{embedding}_h{h}_l{l}")
 
-    config.sampling.output_dir = f"MyCode/output/generated_samples_image_{embedding}"
+    config.sampling.output_dir = str(Path(__file__).parent.parent / "output" / f"generated_samples_image_{embedding}")
 
     print("=" * 80)
     print(f"IMAGE-TRANSFORMER DIFFUSION — {embedding.upper()} EMBEDDING")

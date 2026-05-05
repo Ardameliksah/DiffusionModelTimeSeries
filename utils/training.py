@@ -12,6 +12,8 @@ from typing import Dict, Tuple, Optional
 import json
 from pathlib import Path
 
+_ROOT = Path(__file__).parent.parent  # MyCode/
+
 
 class Trainer:
     """Training loop manager for diffusion model."""
@@ -185,7 +187,7 @@ def create_optimizer_and_scheduler(
 class TrainingLogger:
     """Logs and saves training metrics."""
     
-    def __init__(self, log_dir: str = "MyCode/output/logs"):
+    def __init__(self, log_dir: str = str(_ROOT / "output" / "logs")):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
@@ -235,7 +237,7 @@ def save_checkpoint(
     optimizer: optim.Optimizer,
     epoch: int,
     loss: float,
-    checkpoint_dir: str = "MyCode/output/checkpoints",
+    checkpoint_dir: str = str(_ROOT / "output" / "checkpoints"),
     filename: Optional[str] = None,
     model_config: dict = None,
 ):

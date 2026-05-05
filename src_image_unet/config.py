@@ -7,7 +7,10 @@ STFT embedding:   ts(B,6,32) -> image(B,12,8,9)  -> pad to (B,12,8,16) -> UNet (
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, Tuple, Optional
+
+_ROOT = Path(__file__).parent.parent  # MyCode/
 
 
 @dataclass
@@ -53,8 +56,8 @@ class TrainingConfig:
     weight_decay: float = 1e-4
     gradient_clip_val: float = 1.0
     lr_scheduler_type: Literal["cosine", "linear"] = "cosine"
-    checkpoint_dir: str = "MyCode/output/checkpoints_unet_delay"
-    log_dir: str = "MyCode/output/logs_unet"
+    checkpoint_dir: str = str(_ROOT / "output" / "checkpoints_unet_delay")
+    log_dir: str = str(_ROOT / "output" / "logs_unet")
     save_every_n_epochs: int = 250
     validate_every_n_epochs: int = 10
 
@@ -65,12 +68,12 @@ class SamplingConfig:
     num_sampling_steps: int = 100
     eta: float = 0.0
     batch_size: int = 16
-    output_dir: str = "MyCode/output/generated_samples_unet"
+    output_dir: str = str(_ROOT / "output" / "generated_samples_unet")
 
 
 @dataclass
 class DataConfig:
-    data_path: str = "MyCode/dataset/stocks_data.csv"
+    data_path: str = str(_ROOT / "dataset" / "stocks_data.csv")
     train_split: float = 0.8
     val_split: float = 0.1
     test_split: float = 0.1

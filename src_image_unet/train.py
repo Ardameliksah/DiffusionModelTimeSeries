@@ -55,9 +55,9 @@ def train(
     else:
         mc = config.model.model_channels
         nb = config.model.num_blocks
-        config.training.checkpoint_dir = f"MyCode/output/checkpoints_unet_{embedding}_mc{mc}_nb{nb}"
+        config.training.checkpoint_dir = str(Path(__file__).parent.parent / "output" / f"checkpoints_unet_{embedding}_mc{mc}_nb{nb}")
 
-    config.sampling.output_dir = f"MyCode/output/generated_samples_unet_{embedding}"
+    config.sampling.output_dir = str(Path(__file__).parent.parent / "output" / f"generated_samples_unet_{embedding}")
 
     print("=" * 80)
     print(f"IMAGE-UNET DIFFUSION — {embedding.upper()} EMBEDDING")

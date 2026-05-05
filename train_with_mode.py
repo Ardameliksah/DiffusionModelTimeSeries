@@ -88,7 +88,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     if (hidden_dim is not None or num_layers is not None) and checkpoint_dir is None:
         h = config.model.hidden_dim
         l = config.model.num_layers
-        config.training.checkpoint_dir = f"MyCode/output/checkpoints_h{h}_l{l}"
+        config.training.checkpoint_dir = str(Path(__file__).parent / "output" / f"checkpoints_h{h}_l{l}")
 
     print("=" * 80)
     print(f"TRANSFORMER DIFFUSION MODEL - {mode.upper()} MODE")

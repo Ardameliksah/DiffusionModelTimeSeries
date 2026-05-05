@@ -107,7 +107,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate synthetic time series samples")
     parser.add_argument("--mode", choices=["raw", "image"], default="raw", help="Model mode")
     parser.add_argument("--embedding", choices=["delay", "patch", "stft", "mrti"], default="delay", help="Image embedding type (for image mode)")
-    parser.add_argument("--checkpoint", type=str, default="MyCode/output/checkpoints/best_model.pt", help="Path to checkpoint")
+    parser.add_argument("--checkpoint", type=str, default=str(Path(__file__).parent / "output" / "checkpoints" / "best_model.pt"), help="Path to checkpoint")
     parser.add_argument("--num-samples", type=int, default=100, help="Number of samples to generate")
     parser.add_argument("--num-steps", type=int, default=50, help="DDIM sampling steps")
     parser.add_argument("--eta", type=float, default=0.0, help="DDIM eta parameter")
@@ -130,7 +130,7 @@ def main():
         print(f"✓ Using ImageVersionConfig with {args.embedding} embedding")
         # Auto-detect checkpoint for image mode
         if args.checkpoint is None:
-            checkpoint_path = "MyCode/output/checkpoints_image/checkpoint_epoch_0010.pt"
+            checkpoint_path = str(Path(__file__).parent / "output" / "checkpoints_image" / "checkpoint_epoch_0010.pt")
             print(f"✓ Auto-detected checkpoint: {checkpoint_path}")
         else:
             checkpoint_path = args.checkpoint
