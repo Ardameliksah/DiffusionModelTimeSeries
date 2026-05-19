@@ -154,6 +154,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     print()
     
     best_val_loss = float('inf')
+    best_epoch = None
     saved_model_config = config.model.__dict__.copy()
 
     for epoch in range(start_epoch, config.training.num_epochs):
@@ -167,7 +168,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                # Save best model
+                best_epoch = epoch + 1
                 save_checkpoint(model, optimizer, epoch, val_loss,
                                 checkpoint_dir=config.training.checkpoint_dir,
                                 filename="best_model.pt",
@@ -178,7 +179,9 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         logger.log_epoch(epoch, train_loss, val_loss, current_lr)
 
         if val_loss is not None:
-            print(f"Epoch {epoch+1:3d} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
+            is_best = (epoch + 1) == best_epoch
+            best_marker = f"  *** best model saved (epoch {best_epoch}) ***" if is_best else ""
+            print(f"Epoch {epoch+1:3d} | Train: {train_loss:.4f} | Val: {val_loss:.4f}{best_marker}")
         else:
             print(f"Epoch {epoch+1:3d} | Train: {train_loss:.4f}")
 
