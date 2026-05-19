@@ -60,7 +60,7 @@ class TrainingConfig:
 class SamplingConfig:
     """Sampling hyperparameters."""
     sampler_type: Literal["ddpm", "ddim"] = "ddim"
-    num_sampling_steps: int = 100  # For DDIM; DDPM uses full num_timesteps
+    num_sampling_steps: int = 500  # For DDIM; DDPM uses full num_timesteps
     eta: float = 0.0  # Controls stochasticity in DDIM (0 = deterministic)
     batch_size: int = 16
     output_dir: str = str(_ROOT / "output" / "generated_samples")
@@ -80,6 +80,7 @@ class DataConfig:
     # - True: MinMax + [-1,1] remap (Diffusion-TS, BOUNDED, RECOMMENDED) + TEMPORAL SPLIT
     # - False: Z-score (Original, unbounded) + RANDOM SPLIT
     neg_one_to_one: bool = True
+    per_window_norm: bool = True   # True = per-window MinMax; False = global scaler
 
 
 class Config:

@@ -22,7 +22,7 @@ def evaluate(
     mode: str = "raw",
     checkpoint_path: str = None,
     device: str = "cpu",
-    num_samples: int = 100,
+    num_samples: int = 256,
     output_dir: str = None,
     n_metric_iterations: int = 5,
     compute_context_fid: bool = False,
@@ -120,6 +120,7 @@ def evaluate(
         neg_one_to_one=config.data.neg_one_to_one,
         train_ratio=config.data.train_split,
         num_workers=0,
+        per_window=config.data.per_window_norm,
     )
     
     real_data_batch = next(iter(test_loader)).cpu().numpy()
@@ -260,7 +261,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num-samples",
         type=int,
-        default=100,
+        default=256,
         help="Number of samples to generate"
     )
     parser.add_argument(

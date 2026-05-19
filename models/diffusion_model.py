@@ -115,13 +115,15 @@ class DiffusionModel(nn.Module):
         predicted_x0, target_x0 = self.forward(x_0, t)
 
         if loss_type == "l1":
-            loss = nn.functional.l1_loss(predicted_x0, target_x0)
+            loss = nn.functional.l1_loss(predicted_x0, target_x0, reduction="none")
         elif loss_type == "mse":
-            loss = nn.functional.mse_loss(predicted_x0, target_x0)
+            loss = nn.functional.mse_loss(predicted_x0, target_x0, reduction="none")
         else:
             raise ValueError(f"Unknown loss type: {loss_type}")
 
-        return loss
+        loss = loss.mean(dim=[1, 2])                    # (batch,)
+        w = self.diffusion.loss_weight[t]               # (batch,)
+        return (loss * w).mean()
     
     def sample(
         self,

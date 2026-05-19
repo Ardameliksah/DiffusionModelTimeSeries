@@ -92,7 +92,7 @@ class TrainingConfig:
 class SamplingConfig:
     """Sampling hyperparameters."""
     sampler_type: Literal["ddpm", "ddim"] = "ddim"
-    num_sampling_steps: int = 50
+    num_sampling_steps: int = 500
     eta: float = 0.0
     batch_size: int = 16
     output_dir: str = str(_ROOT / "output" / "generated_samples_image")

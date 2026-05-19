@@ -35,6 +35,7 @@ def create_data_loaders(
     neg_one_to_one: bool,
     train_ratio: float = 0.8,
     num_workers: int = 0,
+    per_window: bool = False,
 ):
     """
     Build train + test DataLoaders and return them together with the dataset.
@@ -49,6 +50,7 @@ def create_data_loaders(
         scaler=scaler,
         window_length=window_length,
         train_ratio=train_ratio,
+        per_window=per_window,
     )
 
     train_loader = DataLoader(

@@ -34,6 +34,7 @@ class StockDataset(Dataset):
         window_length: int = 32,
         stride: int = 1,
         train_ratio: float = 0.8,
+        per_window: bool = False,
     ):
         super().__init__()
         self.scaler = scaler
@@ -58,14 +59,34 @@ class StockDataset(Dataset):
         raw = df.values.astype(np.float32)
         self.num_features = raw.shape[1]
 
-        # --- fit scaler and transform ----------------------------------------
-        normalized = scaler.fit_transform(raw)  # shape (T, F)
+        # --- normalization + sliding windows ---------------------------------
+        if per_window:
+            # Per-window MinMax [-1, 1]: each window normalized by its own stats.
+            # Eliminates global-outlier distortion (e.g. volume spikes) and lets
+            # the model focus on within-window dynamics, not absolute price levels.
+            windows, w_mins, w_maxs = [], [], []
+            for i in range(0, len(raw) - window_length + 1, stride):
+                w = raw[i: i + window_length]           # (W, F)
+                w_min = w.min(axis=0)                   # (F,)
+                w_max = w.max(axis=0)                   # (F,)
+                w_range = w_max - w_min
+                w_range[w_range == 0] = 1.0             # constant feature → map to 0
+                w_norm = 2.0 * (w - w_min) / w_range - 1.0   # [-1, 1]
+                windows.append(w_norm.T)                # (F, W) channels-first
+                w_mins.append(w_min)
+                w_maxs.append(w_max)
+            self.window_min = np.array(w_mins, dtype=np.float32)  # (N, F)
+            self.window_max = np.array(w_maxs, dtype=np.float32)  # (N, F)
+            self.scaler = scaler  # kept so interface stays consistent
+        else:
+            # Global scaler: fit on entire CSV, then slide windows
+            normalized = scaler.fit_transform(raw)      # (T, F)
+            self.scaler = scaler
+            windows = []
+            for i in range(0, len(normalized) - window_length + 1, stride):
+                w = normalized[i: i + window_length]    # (W, F)
+                windows.append(w.T)                     # (F, W) channels-first
 
-        # --- sliding windows -------------------------------------------------
-        windows = []
-        for i in range(0, len(normalized) - window_length + 1, stride):
-            w = normalized[i: i + window_length]        # (W, F)
-            windows.append(w.T)                          # (F, W)  channels-first
         windows = np.array(windows, dtype=np.float32)
 
         # --- temporal split ---------------------------------------------------
@@ -84,13 +105,29 @@ class StockDataset(Dataset):
     def get_test_data(self) -> torch.Tensor:
         return self.test_windows
 
-    def denormalize(self, data) -> np.ndarray:
+    def denormalize(self, data, window_indices=None) -> np.ndarray:
         """
         Reverse-transform an array of shape (B, F, W) back to original scale.
+
+        Args:
+            data: (B, F, W) normalized tensor or array
+            window_indices: list of int of length B — required when per_window=True
+                            to select the correct per-window scale parameters.
         """
         if not isinstance(data, np.ndarray):
             data = data.cpu().numpy()
         B, F, W = data.shape
+
+        if hasattr(self, 'window_min') and window_indices is not None:
+            flat = data.transpose(0, 2, 1)              # (B, W, F)
+            out = np.zeros_like(flat)
+            for b, idx in enumerate(window_indices):
+                w_range = self.window_max[idx] - self.window_min[idx]  # (F,)
+                w_range[w_range == 0] = 1.0
+                out[b] = (flat[b] + 1.0) / 2.0 * w_range + self.window_min[idx]
+            return out.transpose(0, 2, 1).astype(np.float32)   # (B, F, W)
+
+        # Fallback: global scaler
         flat = data.transpose(0, 2, 1).reshape(-1, F)       # (B*W, F)
         inv = self.scaler.inverse_transform(flat)            # (B*W, F)
         return inv.reshape(B, W, F).transpose(0, 2, 1).astype(np.float32)

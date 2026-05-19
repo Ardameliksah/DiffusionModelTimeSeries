@@ -6,7 +6,7 @@ Includes loss computation, optimization, and learning rate scheduling.
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from torch.utils.data import DataLoader
 from typing import Dict, Tuple, Optional
 import json
@@ -158,24 +158,28 @@ def create_optimizer_and_scheduler(
     
     # Compute total steps if not provided
     if total_steps is None:
-        # Assume ~50 batches per epoch (approximate)
+        # Fallback only — callers should pass len(train_loader) * num_epochs
         total_steps = num_epochs * 50
-    
+
     # Create learning rate scheduler
     if scheduler_type == "cosine":
-        # Linear warmup + cosine annealing
-        scheduler = torch.optim.lr_scheduler.ChainedScheduler([
-            LinearLR(
-                optimizer,
-                start_factor=1e-3,
-                total_iters=warmup_steps,
-            ),
-            CosineAnnealingLR(
-                optimizer,
-                T_max=total_steps - warmup_steps,
-                eta_min=0,
-            ),
-        ])
+        # Linear warmup then cosine annealing (SequentialLR switches at milestone)
+        warmup = LinearLR(
+            optimizer,
+            start_factor=1e-3,
+            end_factor=1.0,
+            total_iters=warmup_steps,
+        )
+        cosine = CosineAnnealingLR(
+            optimizer,
+            T_max=max(1, total_steps - warmup_steps),
+            eta_min=1e-6,
+        )
+        scheduler = SequentialLR(
+            optimizer,
+            schedulers=[warmup, cosine],
+            milestones=[warmup_steps],
+        )
     elif scheduler_type == "linear":
         scheduler = LinearLR(optimizer, start_factor=1.0, total_iters=total_steps)
     else:

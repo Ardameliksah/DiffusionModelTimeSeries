@@ -31,6 +31,7 @@ def get_data_loaders(config):
         neg_one_to_one=config.data.neg_one_to_one,
         train_ratio=config.data.train_split,
         num_workers=config.data.num_workers,
+        per_window=config.data.per_window_norm,
     )
     return train_loader, test_loader, dataset
 
@@ -113,6 +114,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     
     # Create optimizer and scheduler
     print("\n3. Setting up optimizer and scheduler...")
+    actual_total_steps = len(train_loader) * config.training.num_epochs
     optimizer, scheduler = create_optimizer_and_scheduler(
         model,
         learning_rate=config.training.learning_rate,
@@ -120,7 +122,9 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         num_epochs=config.training.num_epochs,
         warmup_steps=config.training.warmup_steps,
         scheduler_type=config.training.lr_scheduler_type,
+        total_steps=actual_total_steps,
     )
+    print(f"   Total steps: {actual_total_steps} ({len(train_loader)} batches/epoch × {config.training.num_epochs} epochs)")
     
     # Create trainer
     trainer = Trainer(
