@@ -37,7 +37,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries"):
     """
     Train the diffusion model in specified mode.
 
@@ -88,6 +88,16 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         config.model.learnable_pos_enc = (pos_enc == "learnable")
     if num_workers is not None:
         config.data.num_workers = num_workers
+
+    if use_wandb:
+        import wandb
+        _h = config.model.hidden_dim
+        _l = config.model.num_layers
+        wandb.init(
+            project=wandb_project,
+            name=f"{mode}_h{_h}_l{_l}",
+            config=config.to_dict(),
+        )
 
     print("=" * 80)
     print(f"TRANSFORMER DIFFUSION MODEL - {mode.upper()} MODE")
@@ -173,10 +183,19 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
                                 checkpoint_dir=config.training.checkpoint_dir,
                                 filename="best_model.pt",
                                 model_config=saved_model_config)
+                if use_wandb:
+                    wandb.run.summary["best_val_loss"] = best_val_loss
+                    wandb.run.summary["best_epoch"] = best_epoch
 
         # Log metrics
         current_lr = optimizer.param_groups[0]['lr']
         logger.log_epoch(epoch, train_loss, val_loss, current_lr)
+
+        if use_wandb:
+            _log = {"epoch": epoch + 1, "train_loss": train_loss, "lr": current_lr}
+            if val_loss is not None:
+                _log["val_loss"] = val_loss
+            wandb.log(_log)
 
         if val_loss is not None:
             is_best = (epoch + 1) == best_epoch
@@ -193,6 +212,42 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
                             model_config=saved_model_config)
             print(f"   Checkpoint saved: {config.training.checkpoint_dir}/checkpoint_epoch_{epoch+1}.pt")
     
+    # ── Loss curve plot ───────────────────────────────────────────────────────
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    epochs_all  = [e + 1 for e in logger.metrics["epoch"]]
+    train_losses = logger.metrics["train_loss"]
+
+    val_epochs  = [e + 1 for e, v in zip(logger.metrics["epoch"], logger.metrics["val_loss"]) if v is not None]
+    val_losses  = [v for v in logger.metrics["val_loss"] if v is not None]
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(epochs_all, train_losses, label="Train loss", linewidth=1.2)
+    ax.plot(val_epochs, val_losses, label="Val loss", linewidth=1.5, marker="o", markersize=3)
+    if best_epoch is not None:
+        ax.axvline(best_epoch, color="red", linestyle="--", linewidth=1, label=f"Best (epoch {best_epoch})")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    h = config.model.hidden_dim
+    l = config.model.num_layers
+    ax.set_title(f"Loss curve — {mode} | h{h} l{l}")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    plot_dir = Path(config.training.checkpoint_dir).parent
+    plot_path = plot_dir / f"loss_curve_h{h}_l{l}_{mode}.png"
+    fig.savefig(plot_path, dpi=120)
+    plt.close(fig)
+    print(f"Loss curve saved to: {plot_path}")
+
+    if use_wandb:
+        wandb.log({"loss_curve": wandb.Image(str(plot_path))})
+        wandb.finish()
+    # ─────────────────────────────────────────────────────────────────────────
+
     print("\n" + "=" * 80)
     print(f"Training complete! ({mode} mode)")
     print(f"Best val loss: {best_val_loss:.4f}")
