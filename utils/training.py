@@ -74,8 +74,8 @@ class Trainer:
             self.scheduler.step()
         
         self.step_count += 1
-        
-        return loss.item()
+
+        return loss
     
     def train_epoch(self, train_loader: DataLoader) -> float:
         """
@@ -88,16 +88,14 @@ class Trainer:
             Average loss for the epoch
         """
         self.model.train()
-        total_loss = 0.0
+        total_loss = torch.tensor(0.0, device=self.device)
         num_batches = 0
-        
+
         for batch in train_loader:
-            loss = self.train_step(batch)
-            total_loss += loss
+            total_loss += self.train_step(batch)
             num_batches += 1
-        
-        avg_loss = total_loss / num_batches
-        return avg_loss
+
+        return (total_loss / num_batches).item()
     
     @torch.no_grad()
     def evaluate(self, val_loader: DataLoader) -> float:

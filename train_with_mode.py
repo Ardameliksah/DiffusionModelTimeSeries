@@ -32,11 +32,12 @@ def get_data_loaders(config):
         train_ratio=config.data.train_split,
         num_workers=config.data.num_workers,
         per_window=config.data.per_window_norm,
+        pin_memory=config.data.pin_memory,
     )
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None):
     """
     Train the diffusion model in specified mode.
 
@@ -86,6 +87,8 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     # Auto-suffix checkpoint dir so different capacity runs don't overwrite each other
     if pos_enc is not None:
         config.model.learnable_pos_enc = (pos_enc == "learnable")
+    if num_workers is not None:
+        config.data.num_workers = num_workers
     if (hidden_dim is not None or num_layers is not None) and checkpoint_dir is None:
         h = config.model.hidden_dim
         l = config.model.num_layers

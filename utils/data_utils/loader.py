@@ -36,6 +36,7 @@ def create_data_loaders(
     train_ratio: float = 0.8,
     num_workers: int = 0,
     per_window: bool = False,
+    pin_memory: bool = False,
 ):
     """
     Build train + test DataLoaders and return them together with the dataset.
@@ -54,10 +55,11 @@ def create_data_loaders(
     )
 
     train_loader = DataLoader(
-        dataset,                       # __getitem__ returns train windows
+        dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
+        pin_memory=pin_memory,
     )
 
     test_ds = _TensorDataset(dataset.get_test_data())
@@ -66,6 +68,7 @@ def create_data_loaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
+        pin_memory=pin_memory,
     )
 
     return train_loader, test_loader, dataset
