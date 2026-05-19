@@ -164,7 +164,9 @@ def evaluate(
     print(f"   Visualization saved: {save_path}")
     
     # Save statistics
-    stats_save_path = Path(output_dir) / f"statistics_{mode}_mode.txt"
+    h = config.model.hidden_dim
+    l = config.model.num_layers
+    stats_save_path = Path(output_dir) / f"eval_h{h}_l{l}_{mode}.txt"
     with open(stats_save_path, 'w') as f:
         f.write(f"Mode: {mode}\n")
         f.write(f"Checkpoint: {checkpoint_path}\n\n")

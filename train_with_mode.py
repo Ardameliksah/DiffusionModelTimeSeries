@@ -84,15 +84,10 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         config.model.ff_dim = hidden_dim * 4  # keep standard 4x ratio
     if num_layers is not None:
         config.model.num_layers = num_layers
-    # Auto-suffix checkpoint dir so different capacity runs don't overwrite each other
     if pos_enc is not None:
         config.model.learnable_pos_enc = (pos_enc == "learnable")
     if num_workers is not None:
         config.data.num_workers = num_workers
-    if (hidden_dim is not None or num_layers is not None) and checkpoint_dir is None:
-        h = config.model.hidden_dim
-        l = config.model.num_layers
-        config.training.checkpoint_dir = str(Path(__file__).parent / "output" / f"checkpoints_h{h}_l{l}")
 
     print("=" * 80)
     print(f"TRANSFORMER DIFFUSION MODEL - {mode.upper()} MODE")
