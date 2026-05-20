@@ -9,12 +9,21 @@ Both modes use the same training/sampling interface.
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from typing import Literal, Tuple, Optional
 from pathlib import Path
 
 from models.diffusion_model import DiffusionModel
 from models.unet_diffusion_model import UNetDiffusionModel
 from utils.image_transforms import DelayEmbedder, PatchEmbedder, STFTEmbedder, MRTIEmbedder
+
+
+def _next_power_of_2(n: int) -> int:
+    """Return the smallest power of 2 that is >= n."""
+    p = 1
+    while p < n:
+        p <<= 1
+    return p
 
 
 class ImagePreprocessor(nn.Module):
@@ -121,12 +130,41 @@ class UnifiedDiffusionModel(nn.Module):
             if embedder_type == "stft":
                 input_channels = config.model.input_channels * 2
 
+            # ── Build embedder FIRST so we can probe its actual output shape ──
+            self.image_preprocessor = ImagePreprocessor(
+                embedder_type=embedder_type,
+                device=device,
+                seq_len=config.model.sequence_length,
+                delay=getattr(config.image, "delay", 4),
+                embedding_dim=getattr(config.image, "embedding_dim", 8),
+                patch_size=getattr(config.image, "patch_size", 4),
+                img_size=getattr(config.image, "img_size", 8),
+                n_fft=getattr(config.image, "n_fft", 16),
+                hop_length=getattr(config.image, "hop_length", 4),
+                num_scales=getattr(config.image, "num_scales", 3),
+                num_periods=getattr(config.image, "num_periods", 3),
+            )
+
+            # Probe actual H×W produced by the embedder (e.g. STFT gives 8×9, not 8×8)
+            _dummy = torch.zeros(1, config.model.sequence_length, config.model.input_channels)
+            with torch.no_grad():
+                _dummy_img = self.image_preprocessor.ts_to_img(_dummy)
+            _, _, _H, _W = _dummy_img.shape
+            self.orig_H = _H
+            self.orig_W = _W
+            # Pad each dim to the next power of 2 so UNet stride-2 ops are symmetric
+            self.H_pad = _next_power_of_2(_H)
+            self.W_pad = _next_power_of_2(_W)
+            unet_res   = max(self.H_pad, self.W_pad)
+            print(f"   [image mode] embedder output: {_H}×{_W}  →  padded to {self.H_pad}×{self.W_pad}  (UNet res={unet_res})")
+
             self.diffusion_model = UNetDiffusionModel(
+                img_resolution=unet_res,
                 in_channels=input_channels,
                 out_channels=input_channels,
                 model_channels=config.model.hidden_dim,
                 num_blocks=config.model.num_layers,
-                attn_resolutions=(8,),
+                attn_resolutions=(unet_res,),
                 dropout=config.model.dropout,
                 embedding_type='fourier',
             )
@@ -144,21 +182,6 @@ class UnifiedDiffusionModel(nn.Module):
             self.pred_objective = getattr(config.model, 'pred_objective', 'pred_eps')
             self.img_loss_type  = getattr(config.model, 'loss_type', 'mse')
             # ─────────────────────────────────────────────────────────────
-
-            # Image embedder
-            self.image_preprocessor = ImagePreprocessor(
-                embedder_type=embedder_type,
-                device=device,
-                seq_len=config.model.sequence_length,
-                delay=getattr(config.image, "delay", 4),
-                embedding_dim=getattr(config.image, "embedding_dim", 8),
-                patch_size=getattr(config.image, "patch_size", 4),
-                img_size=getattr(config.image, "img_size", 8),
-                n_fft=getattr(config.image, "n_fft", 16),
-                hop_length=getattr(config.image, "hop_length", 4),
-                num_scales=getattr(config.image, "num_scales", 3),
-                num_periods=getattr(config.image, "num_periods", 3),
-            )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
     
@@ -219,22 +242,25 @@ class UnifiedDiffusionModel(nn.Module):
         elif self.model_type == "image":
             # ── Convert to image space ────────────────────────────────────
             x_ts  = batch.permute(0, 2, 1)                          # (B, L, C)
-            x_0   = self.image_preprocessor.ts_to_img(x_ts)        # (B, C, H, W)
+            x_0   = self.image_preprocessor.ts_to_img(x_ts)        # (B, C, H, W)  e.g. 8×9 for STFT
+
+            # Pad to power-of-2 dims so UNet skip connections match on up/down pass
+            x_0   = F.pad(x_0, (0, self.W_pad - self.orig_W,
+                                  0, self.H_pad - self.orig_H))    # (B, C, H_pad, W_pad)
 
             B      = x_0.shape[0]
             device = x_0.device
             t      = torch.randint(0, self.diffusion.num_timesteps, (B,), device=device)
             x_t, noise = self.diffusion.q_sample(x_0, t)
 
-            pred   = self.diffusion_model(x_t, t)                   # (B, C, H, W)
+            pred   = self.diffusion_model(x_t, t)                   # (B, C, H_pad, W_pad)
 
             # Target depends on prediction objective
             target = x_0 if self.pred_objective == "pred_x0" else noise
 
             # Base loss (use per-element so we can apply per-timestep weight)
-            import torch.nn.functional as _F
-            _fn    = _F.l1_loss if self.img_loss_type == "l1" else _F.mse_loss
-            per_el = _fn(pred, target, reduction="none")            # (B, C, H, W)
+            _fn    = F.l1_loss if self.img_loss_type == "l1" else F.mse_loss
+            per_el = _fn(pred, target, reduction="none")            # (B, C, H_pad, W_pad)
             per_s  = per_el.mean(dim=list(range(1, per_el.ndim)))  # (B,)
 
             # Same per-timestep loss weighting as raw mode
@@ -275,11 +301,11 @@ class UnifiedDiffusionModel(nn.Module):
             )
 
         # IMAGE mode — DDIM using the same GaussianDiffusion as raw mode
-        img_res  = self.diffusion_model.img_resolution
         channels = self.diffusion_model.in_channels
         total_T  = self.diffusion.num_timesteps
 
-        x_t = torch.randn(batch_size, channels, img_res, img_res, device=device)
+        # Sample in the padded space (H_pad×W_pad), which the UNet was built for
+        x_t = torch.randn(batch_size, channels, self.H_pad, self.W_pad, device=device)
         trajectory = [x_t.cpu()] if return_trajectory else None
 
         # Build uniformly-spaced DDIM time pairs (same as DiffusionModel._sample_ddim)
@@ -316,7 +342,8 @@ class UnifiedDiffusionModel(nn.Module):
             if return_trajectory:
                 trajectory.append(x_t.cpu())
 
-        # Convert generated image back to time series
+        # Crop padding back to original embedder output shape before inverting
+        x_t    = x_t[:, :, :self.orig_H, :self.orig_W]     # (batch, C, H, W)
         x_ts   = self.image_preprocessor.img_to_ts(x_t)    # (batch, seq_len, channels)
         output = x_ts.permute(0, 2, 1)                      # (batch, channels, seq_len)
 
