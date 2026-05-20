@@ -168,9 +168,10 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         config.decomposition.trend_weight  = trend_weight  if trend_weight  is not None else 0.5
         config.decomposition.season_weight = season_weight if season_weight is not None else 0.0
     else:
-        if fft_weight    is not None: config.decomposition.fft_weight    = fft_weight
-        if trend_weight  is not None: config.decomposition.trend_weight  = trend_weight
-        if season_weight is not None: config.decomposition.season_weight = season_weight
+        if hasattr(config, 'decomposition'):
+            if fft_weight    is not None: config.decomposition.fft_weight    = fft_weight
+            if trend_weight  is not None: config.decomposition.trend_weight  = trend_weight
+            if season_weight is not None: config.decomposition.season_weight = season_weight
 
     if use_wandb:
         import wandb
@@ -204,10 +205,10 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     if mode == "image":
         print(f"   Image embedding: {config.image.embedding_type}")
         print(f"   Image size: {config.image.embedding_dim}x{config.image.embedding_dim}")
-    if mode == "decomposition" or any([
+    if hasattr(config, 'decomposition') and (mode == "decomposition" or any([
         config.decomposition.fft_weight, config.decomposition.trend_weight,
         config.decomposition.season_weight,
-    ]):
+    ])):
         d = config.decomposition
         print(f"   Decomposition loss: fft={d.fft_weight}  trend={d.trend_weight}  "
               f"season={d.season_weight}  kernel={d.trend_kernel}")
