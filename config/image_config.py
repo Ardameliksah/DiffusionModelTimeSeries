@@ -50,6 +50,10 @@ class ModelConfig:
     input_channels: int = 6  # Open, High, Low, Close, Adj_Close, Volume
     sequence_length: int = 32
     
+    # ── Training objective ── (choose to match raw mode or keep DDPM default)
+    pred_objective: str = "pred_eps"  # "pred_eps" (DDPM) | "pred_x0" (Diffusion-TS style)
+    loss_type: str = "mse"            # "mse" | "l1"
+
     # These are COMPUTED from image config, don't change manually
     image_height: int = 8  # Will be updated from image_config.embedding_dim
     image_width: int = 8   # Will be updated from image_config.embedding_dim

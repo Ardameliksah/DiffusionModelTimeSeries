@@ -114,14 +114,13 @@ class UnifiedDiffusionModel(nn.Module):
         
         elif model_type == "image":
             # U-Net mode with image embeddings
-            # Determine input channels based on embedder type
+            from models.diffusion import GaussianDiffusion
+
             embedder_type = config.image.embedding_type
             input_channels = config.model.input_channels
-            
-            # STFT doubles channels (real + imaginary concatenated)
             if embedder_type == "stft":
                 input_channels = config.model.input_channels * 2
-            
+
             self.diffusion_model = UNetDiffusionModel(
                 in_channels=input_channels,
                 out_channels=input_channels,
@@ -131,7 +130,21 @@ class UnifiedDiffusionModel(nn.Module):
                 dropout=config.model.dropout,
                 embedding_type='fourier',
             )
-            
+
+            # ── Same GaussianDiffusion used by raw mode ───────────────────
+            self.diffusion = GaussianDiffusion(
+                num_timesteps=config.diffusion.num_timesteps,
+                beta_start=config.diffusion.beta_start,
+                beta_end=config.diffusion.beta_end,
+                noise_schedule=config.diffusion.noise_schedule,
+                device=device,
+            )
+            # Training objective & loss — read from config so they're saved
+            # in the checkpoint and auto-restored at sampling/eval time.
+            self.pred_objective = getattr(config.model, 'pred_objective', 'pred_eps')
+            self.img_loss_type  = getattr(config.model, 'loss_type', 'mse')
+            # ─────────────────────────────────────────────────────────────
+
             # Image embedder
             self.image_preprocessor = ImagePreprocessor(
                 embedder_type=embedder_type,
@@ -204,10 +217,29 @@ class UnifiedDiffusionModel(nn.Module):
             return self.diffusion_model.compute_loss(batch, loss_type=loss_type)
         
         elif self.model_type == "image":
-            # Convert to image space and compute loss there
-            x_ts = batch.permute(0, 2, 1)  # (batch, seq_len, channels)
-            x_img = self.image_preprocessor.ts_to_img(x_ts)  # (batch, channels, H, W)
-            return self.diffusion_model.compute_loss(x_img, loss_type=loss_type)
+            # ── Convert to image space ────────────────────────────────────
+            x_ts  = batch.permute(0, 2, 1)                          # (B, L, C)
+            x_0   = self.image_preprocessor.ts_to_img(x_ts)        # (B, C, H, W)
+
+            B      = x_0.shape[0]
+            device = x_0.device
+            t      = torch.randint(0, self.diffusion.num_timesteps, (B,), device=device)
+            x_t, noise = self.diffusion.q_sample(x_0, t)
+
+            pred   = self.diffusion_model(x_t, t)                   # (B, C, H, W)
+
+            # Target depends on prediction objective
+            target = x_0 if self.pred_objective == "pred_x0" else noise
+
+            # Base loss (use per-element so we can apply per-timestep weight)
+            import torch.nn.functional as _F
+            _fn    = _F.l1_loss if self.img_loss_type == "l1" else _F.mse_loss
+            per_el = _fn(pred, target, reduction="none")            # (B, C, H, W)
+            per_s  = per_el.mean(dim=list(range(1, per_el.ndim)))  # (B,)
+
+            # Same per-timestep loss weighting as raw mode
+            w = self.diffusion.loss_weight[t]                       # (B,)
+            return (per_s * w).mean()
         
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
@@ -242,31 +274,51 @@ class UnifiedDiffusionModel(nn.Module):
                 return_trajectory=return_trajectory,
             )
 
-        # IMAGE mode: reverse the linear-sigma forward process
-        # Forward: x_t = x_0 + (t/T) * noise  →  reverse via Euler steps
-        img_res = self.diffusion_model.img_resolution
+        # IMAGE mode — DDIM using the same GaussianDiffusion as raw mode
+        img_res  = self.diffusion_model.img_resolution
         channels = self.diffusion_model.in_channels
-        T = self.diffusion_model.num_timesteps
+        total_T  = self.diffusion.num_timesteps
 
         x_t = torch.randn(batch_size, channels, img_res, img_res, device=device)
         trajectory = [x_t.cpu()] if return_trajectory else None
 
-        step_indices = list(range(T - 1, -1, -max(1, T // num_steps)))
-        for t_idx in step_indices:
-            t = torch.full((batch_size,), t_idx, dtype=torch.long, device=device)
-            with torch.no_grad():
-                noise_pred = self.diffusion_model(x_t, t)
+        # Build uniformly-spaced DDIM time pairs (same as DiffusionModel._sample_ddim)
+        times      = torch.linspace(-1, total_T - 1, steps=num_steps + 1)
+        times      = list(reversed(times.int().tolist()))
+        time_pairs = list(zip(times[:-1], times[1:]))
 
-            sigma_t = t_idx / T
-            sigma_prev = max(t_idx - max(1, T // num_steps), 0) / T
-            x_t = x_t - (sigma_t - sigma_prev) * noise_pred
+        for time, time_next in time_pairs:
+            t = torch.full((batch_size,), time, device=device, dtype=torch.long)
+
+            with torch.no_grad():
+                pred = self.diffusion_model(x_t, t)     # UNet output
+
+            # Recover x_start depending on training objective
+            if self.pred_objective == "pred_x0":
+                x_start = pred.clamp(-1.0, 1.0)
+            else:  # pred_eps
+                x_start = self.diffusion.predict_start_from_noise(x_t, t, pred)
+                x_start.clamp_(-1.0, 1.0)
+
+            if time_next < 0:           # last step: output the denoised image directly
+                x_t = x_start
+                continue
+
+            alpha      = self.diffusion.alphas_cumprod[time]
+            alpha_next = self.diffusion.alphas_cumprod[time_next]
+            sigma      = eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+            c          = (1 - alpha_next - sigma ** 2).sqrt()
+
+            noise_pred = self.diffusion.predict_noise_from_start(x_t, t, x_start)
+            noise      = torch.randn_like(x_t)
+            x_t        = x_start * alpha_next.sqrt() + c * noise_pred + sigma * noise
 
             if return_trajectory:
                 trajectory.append(x_t.cpu())
 
         # Convert generated image back to time series
-        x_ts = self.image_preprocessor.img_to_ts(x_t)   # (batch, seq_len, channels)
-        output = x_ts.permute(0, 2, 1)                   # (batch, channels, seq_len)
+        x_ts   = self.image_preprocessor.img_to_ts(x_t)    # (batch, seq_len, channels)
+        output = x_ts.permute(0, 2, 1)                      # (batch, channels, seq_len)
 
         if return_trajectory:
             return torch.stack(trajectory)
@@ -287,6 +339,9 @@ class UnifiedDiffusionModel(nn.Module):
         """Move model to device."""
         super().to(device)
         self.diffusion_model.to(device)
+        if hasattr(self, 'diffusion'):
+            self.diffusion.to(device)
+            self.diffusion.device = device
         if self.image_preprocessor is not None:
             self.image_preprocessor.to(device)
         return self

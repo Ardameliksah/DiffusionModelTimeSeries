@@ -24,15 +24,32 @@ from utils import compute_statistics
 
 
 def load_model(checkpoint_path, mode, config, device):
-    """Load trained model."""
-    model = create_model(config, mode, device)
-    
+    """Load trained model, restoring architecture from checkpoint before building."""
     checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    # ── Restore arch from checkpoint BEFORE create_model() ───────────────────
+    # The checkpoint stores the exact hidden_dim / num_layers used at training
+    # time (which map_selector maps to model_channels / num_blocks for the UNet).
+    # Without this step the rebuilt model has wrong layer sizes and load fails.
+    saved_cfg = checkpoint.get("model_config")
+    if saved_cfg is not None:
+        for key, val in saved_cfg.items():
+            if hasattr(config.model, key):
+                setattr(config.model, key, val)
+        _pos = getattr(config.model, "learnable_pos_enc", "N/A (image mode)")
+        print(f"   Arch restored from checkpoint: "
+              f"hidden_dim={config.model.hidden_dim}, "
+              f"num_layers={config.model.num_layers}, "
+              f"learnable_pos_enc={_pos}")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    model = create_model(config, mode, device)
+
     if 'model_state_dict' in checkpoint:
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
         model.load_state_dict(checkpoint)
-    
+
     model.eval()
     return model
 

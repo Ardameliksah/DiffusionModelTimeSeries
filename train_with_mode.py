@@ -20,6 +20,73 @@ from utils import Trainer, create_optimizer_and_scheduler, TrainingLogger, save_
 from utils.data_utils import create_data_loaders
 
 
+def _compute_inline_metrics(model, test_loader, device, n_iterations, num_samples):
+    """
+    Generate samples and compute discriminative / predictive / VDS / FDDS / corr
+    against real test data. Called mid-training at validation checkpoints.
+
+    Returns a dict of metric values, or None if eval_metrics is unavailable.
+    """
+    import numpy as np
+    try:
+        from eval_metrics import evaluate_samples, vds_score, fdds_score, correlational_score
+    except ImportError:
+        print("   [metrics] eval_metrics module not found — skipping inline metrics.")
+        return None
+
+    model.eval()
+
+    # ── Collect real test data ──────────────────────────────────────────────
+    real_batches, collected = [], 0
+    with torch.no_grad():
+        for batch in test_loader:
+            real_batches.append(batch.cpu().numpy())
+            collected += batch.shape[0]
+            if collected >= num_samples:
+                break
+    if not real_batches:
+        model.train()
+        return None
+
+    real_np = np.concatenate(real_batches, axis=0)[:num_samples]   # (N, C, L)
+    n = real_np.shape[0]
+
+    # ── Generate fake samples ───────────────────────────────────────────────
+    with torch.no_grad():
+        fake_np = model.sample(batch_size=n, sampler_type="ddim",
+                               num_steps=50, eta=0.0).cpu().numpy()   # (N, C, L)
+
+    # eval_metrics expects (N, L, C)
+    real_m = real_np.transpose(0, 2, 1)
+    fake_m = fake_np.transpose(0, 2, 1)
+
+    # ── Compute all metrics ─────────────────────────────────────────────────
+    try:
+        results = evaluate_samples(real_m, fake_m, device=device, n_iterations=n_iterations)
+        vds  = vds_score(real_m, fake_m)
+        fdds = fdds_score(real_m, fake_m)
+        corr = correlational_score(real_m, fake_m)
+    except Exception as exc:
+        print(f"   [metrics] Error during metric computation: {exc}")
+        model.train()
+        return None
+
+    disc = results["discriminative"]
+    pred = results["predictive"]
+
+    model.train()
+    return {
+        "disc_score":          disc["mean"],
+        "disc_score_std":      disc["std"],
+        "test_acc":            disc["test_acc"],
+        "pred_mae":            pred["mean"],
+        "pred_mae_std":        pred["std"],
+        "vds":                 vds,
+        "fdds":                fdds,
+        "correlational_score": corr,
+    }
+
+
 def get_data_loaders(config):
     """Build train/test loaders."""
     norm_label = "MinMax [-1,1]" if config.data.neg_one_to_one else "Z-score"
@@ -37,7 +104,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries"):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, num_metric_samples: int = 128, img_pred_objective: str = None, img_loss_type: str = None):
     """
     Train the diffusion model in specified mode.
 
@@ -88,6 +155,11 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         config.model.learnable_pos_enc = (pos_enc == "learnable")
     if num_workers is not None:
         config.data.num_workers = num_workers
+    # Image-mode specific overrides (no-ops for raw mode)
+    if img_pred_objective is not None and hasattr(config.model, 'pred_objective'):
+        config.model.pred_objective = img_pred_objective
+    if img_loss_type is not None and hasattr(config.model, 'loss_type'):
+        config.model.loss_type = img_loss_type
 
     if use_wandb:
         import wandb
@@ -189,6 +261,29 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
                     wandb.run.summary["best_val_loss"] = best_val_loss
                     wandb.run.summary["best_epoch"] = best_epoch
 
+        # ── Inline evaluation metrics (optional, slow) ───────────────────────
+        inline_metrics = None
+        if eval_metrics and val_loss is not None and (epoch + 1) % eval_metrics_every == 0:
+            print(f"   Computing inline metrics  "
+                  f"(every {eval_metrics_every} epochs | "
+                  f"n_iter={n_metric_iterations} | samples={num_metric_samples}) ...")
+            inline_metrics = _compute_inline_metrics(
+                model, test_loader, device,
+                n_iterations=n_metric_iterations,
+                num_samples=num_metric_samples,
+            )
+            if inline_metrics is not None:
+                print(
+                    f"   DiscScore: {inline_metrics['disc_score']:.4f} "
+                    f"± {inline_metrics['disc_score_std']:.4f}  "
+                    f"(acc={inline_metrics['test_acc']:.4f})  |  "
+                    f"PredMAE: {inline_metrics['pred_mae']:.4f}  |  "
+                    f"VDS: {inline_metrics['vds']:.4f}  |  "
+                    f"FDDS: {inline_metrics['fdds']:.4f}  |  "
+                    f"Corr: {inline_metrics['correlational_score']:.4f}"
+                )
+        # ─────────────────────────────────────────────────────────────────────
+
         # Log metrics
         current_lr = optimizer.param_groups[0]['lr']
         logger.log_epoch(epoch, train_loss, val_loss, current_lr)
@@ -197,6 +292,8 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
             _log = {"epoch": epoch + 1, "train_loss": train_loss, "lr": current_lr}
             if val_loss is not None:
                 _log["val_loss"] = val_loss
+            if inline_metrics is not None:
+                _log.update(inline_metrics)
             wandb.log(_log)
 
         if val_loss is not None:

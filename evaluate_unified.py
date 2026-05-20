@@ -85,9 +85,10 @@ def evaluate(
             for key, val in saved_cfg.items():
                 if hasattr(config.model, key):
                     setattr(config.model, key, val)
+            _pos = getattr(config.model, "learnable_pos_enc", "N/A (image mode)")
             print(f"   Arch restored from checkpoint: hidden_dim={config.model.hidden_dim}, "
                   f"num_layers={config.model.num_layers}, "
-                  f"learnable_pos_enc={config.model.learnable_pos_enc}")
+                  f"learnable_pos_enc={_pos}")
 
     model = create_model(config, model_type=mode, device=device)
     model.eval()
