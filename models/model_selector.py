@@ -201,21 +201,15 @@ class UnifiedDiffusionModel(nn.Module):
             return self.diffusion_model(x_t, t)
         
         elif self.model_type == "image":
-            # Image mode: convert → denoise → convert back
-            batch_size = x_t.shape[0]
-            
-            # Convert time series to image
+            # Image mode: convert → pad → denoise → crop → convert back
             x_ts = x_t.permute(0, 2, 1)  # (batch, seq_len, channels)
             x_img = self.image_preprocessor.ts_to_img(x_ts)  # (batch, channels, H, W)
-            
-            # Denoise through U-Net
-            output_img = self.diffusion_model(x_img, t)  # (batch, channels, H, W)
-            
-            # Convert back to time series
+            x_img = F.pad(x_img, (0, self.W_pad - self.orig_W,
+                                   0, self.H_pad - self.orig_H))  # (batch, C, H_pad, W_pad)
+            output_img = self.diffusion_model(x_img, t)             # (batch, C, H_pad, W_pad)
+            output_img = output_img[:, :, :self.orig_H, :self.orig_W]  # crop back
             output_ts = self.image_preprocessor.img_to_ts(output_img)  # (batch, seq_len, channels)
-            output = output_ts.permute(0, 2, 1)  # (batch, channels, seq_len)
-            
-            return output
+            return output_ts.permute(0, 2, 1)  # (batch, channels, seq_len)
         
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
