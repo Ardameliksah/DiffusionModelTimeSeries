@@ -263,7 +263,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
 
         # ── Inline evaluation metrics (optional, slow) ───────────────────────
         inline_metrics = None
-        if eval_metrics and val_loss is not None and (epoch + 1) % eval_metrics_every == 0:
+        if eval_metrics and (epoch + 1) % eval_metrics_every == 0:
             print(f"   Computing inline metrics  "
                   f"(every {eval_metrics_every} epochs | "
                   f"n_iter={n_metric_iterations} | samples={num_metric_samples}) ...")
