@@ -109,6 +109,7 @@ class DataConfig:
     pin_memory: bool = True
     normalize: bool = True
     neg_one_to_one: bool = True  # MinMax [-1,1]
+    per_window_norm: bool = True  # True = per-window MinMax; False = global scaler
 
 
 class ImageVersionConfig:

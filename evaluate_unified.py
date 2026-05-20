@@ -31,6 +31,8 @@ def evaluate(
     num_layers: int = None,
     seed: int = 42,
     pos_enc: str = None,
+    use_wandb: bool = False,
+    wandb_project: str = "diffusion-timeseries",
 ):
     """
     Evaluate model in specified mode.
@@ -95,7 +97,26 @@ def evaluate(
     
     print(f"   Model type: {mode}")
     print(f"   Device: {device}")
-    
+
+    if use_wandb:
+        import wandb
+        _h = config.model.hidden_dim
+        _l = config.model.num_layers
+        wandb.init(
+            project=wandb_project,
+            name=f"eval_{mode}_h{_h}_l{_l}",
+            group=f"{mode}_h{_h}_l{_l}",   # groups train+eval runs together in W&B
+            job_type="eval",
+            config={
+                "mode": mode,
+                "num_samples": num_samples,
+                "n_metric_iterations": n_metric_iterations,
+                "checkpoint_path": str(checkpoint_path) if checkpoint_path else None,
+                "hidden_dim": _h,
+                "num_layers": _l,
+            },
+        )
+
     # Generate samples
     print(f"\n3. Generating {num_samples} samples...")
     with torch.no_grad():
@@ -233,6 +254,25 @@ def evaluate(
         with open(stats_save_path, 'a') as f:
             f.write(f"  context_fid: {context_fid:.4f}\n")
         print(f"   Metrics appended to: {stats_save_path}")
+
+    if use_wandb:
+        import wandb
+        _eval_log = {
+            "disc_score":          disc["mean"],
+            "disc_score_std":      disc["std"],
+            "test_acc":            disc["test_acc"],
+            "pred_mae":            pred["mean"],
+            "pred_mae_std":        pred["std"],
+            "vds":                 vds,
+            "fdds":                fdds,
+            "correlational_score": corr,
+            "comparison_plot":     wandb.Image(str(save_path)),
+        }
+        if compute_context_fid:
+            _eval_log["context_fid"] = context_fid
+        wandb.log(_eval_log)
+        wandb.finish()
+        print("   W&B run finished — metrics logged.")
 
     print("\n" + "=" * 80)
     print(f"Evaluation complete! ({mode} mode)")

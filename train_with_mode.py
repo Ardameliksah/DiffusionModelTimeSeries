@@ -95,7 +95,9 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         _l = config.model.num_layers
         wandb.init(
             project=wandb_project,
-            name=f"{mode}_h{_h}_l{_l}",
+            name=f"train_{mode}_h{_h}_l{_l}",
+            group=f"{mode}_h{_h}_l{_l}",
+            job_type="train",
             config=config.to_dict(),
         )
 
