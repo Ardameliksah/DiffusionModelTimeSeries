@@ -30,6 +30,11 @@ class DiffusionModel(nn.Module):
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
         noise_schedule: str = "linear",
+        # Decomposition loss weights (0.0 = disabled)
+        fft_weight:    float = 0.0,
+        trend_weight:  float = 0.0,
+        season_weight: float = 0.0,
+        trend_kernel:  int   = 5,
         device: str = "cpu",
     ):
         """
@@ -49,7 +54,13 @@ class DiffusionModel(nn.Module):
         """
         super().__init__()
         self.device = device
-        
+
+        # Decomposition loss weights
+        self.fft_weight    = fft_weight
+        self.trend_weight  = trend_weight
+        self.season_weight = season_weight
+        self.trend_kernel  = trend_kernel
+
         # Initialize transformer model
         self.transformer = TransformerDiffusionModel(
             input_channels=input_channels,
@@ -123,7 +134,39 @@ class DiffusionModel(nn.Module):
 
         loss = loss.mean(dim=[1, 2])                    # (batch,)
         w = self.diffusion.loss_weight[t]               # (batch,)
-        return (loss * w).mean()
+        total = (loss * w).mean()
+
+        # ── Optional FFT loss ─────────────────────────────────────────────────
+        if self.fft_weight > 0:
+            fft_pred = torch.fft.rfft(predicted_x0, dim=2, norm='forward')
+            fft_true = torch.fft.rfft(target_x0,    dim=2, norm='forward')
+            fft_loss = (nn.functional.l1_loss(fft_pred.real, fft_true.real)
+                      + nn.functional.l1_loss(fft_pred.imag, fft_true.imag))
+            total = total + self.fft_weight * fft_loss
+
+        # ── Optional trend / seasonal loss ────────────────────────────────────
+        if self.trend_weight > 0 or self.season_weight > 0:
+            k = self.trend_kernel
+            trend_pred = nn.functional.avg_pool1d(
+                predicted_x0, kernel_size=k, stride=1, padding=k // 2)
+            trend_true = nn.functional.avg_pool1d(
+                target_x0,    kernel_size=k, stride=1, padding=k // 2)
+
+            if self.trend_weight > 0:
+                t_loss = (nn.functional.l1_loss(
+                    trend_pred, trend_true, reduction='none'
+                ).mean(dim=[1, 2]) * w).mean()
+                total = total + self.trend_weight * t_loss
+
+            if self.season_weight > 0:
+                s_loss = (nn.functional.l1_loss(
+                    predicted_x0 - trend_pred,
+                    target_x0    - trend_true,
+                    reduction='none'
+                ).mean(dim=[1, 2]) * w).mean()
+                total = total + self.season_weight * s_loss
+
+        return total
     
     def sample(
         self,

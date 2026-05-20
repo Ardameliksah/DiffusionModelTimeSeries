@@ -94,7 +94,7 @@ class UnifiedDiffusionModel(nn.Module):
     
     def __init__(
         self,
-        model_type: Literal["raw", "image"],
+        model_type: Literal["raw", "image", "decomposition"],
         config,
         device: str,
     ):
@@ -103,8 +103,9 @@ class UnifiedDiffusionModel(nn.Module):
         self.config = config
         self.device = device
         
-        if model_type == "raw":
-            # Transformer mode
+        if model_type in ("raw", "decomposition"):
+            # Transformer mode (decomposition = raw + extra loss terms)
+            _d = getattr(config, 'decomposition', None)
             self.diffusion_model = DiffusionModel(
                 input_channels=config.model.input_channels,
                 sequence_length=config.model.sequence_length,
@@ -118,6 +119,10 @@ class UnifiedDiffusionModel(nn.Module):
                 beta_start=config.diffusion.beta_start,
                 beta_end=config.diffusion.beta_end,
                 noise_schedule=config.diffusion.noise_schedule,
+                fft_weight    = _d.fft_weight    if _d else 0.0,
+                trend_weight  = _d.trend_weight  if _d else 0.0,
+                season_weight = _d.season_weight if _d else 0.0,
+                trend_kernel  = _d.trend_kernel  if _d else 5,
             )
             self.image_preprocessor = None
         
@@ -196,7 +201,7 @@ class UnifiedDiffusionModel(nn.Module):
             Input: (batch, channels, seq_len) → Image (batch, channels, H, W) → 
             Denoising → Image (batch, channels, H, W) → Time series (batch, channels, seq_len)
         """
-        if self.model_type == "raw":
+        if self.model_type in ("raw", "decomposition"):
             # Direct transformer mode
             return self.diffusion_model(x_t, t)
         
@@ -229,8 +234,8 @@ class UnifiedDiffusionModel(nn.Module):
         Returns:
             Scalar loss
         """
-        if self.model_type == "raw":
-            # Transformer loss on time series
+        if self.model_type in ("raw", "decomposition"):
+            # Transformer loss on time series (decomposition = raw + extra loss terms)
             return self.diffusion_model.compute_loss(batch, loss_type=loss_type)
         
         elif self.model_type == "image":
@@ -285,7 +290,7 @@ class UnifiedDiffusionModel(nn.Module):
         """
         device = next(self.parameters()).device
 
-        if self.model_type == "raw":
+        if self.model_type in ("raw", "decomposition"):
             return self.diffusion_model.sample(
                 batch_size=batch_size,
                 sampler_type=sampler_type,

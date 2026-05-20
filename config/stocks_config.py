@@ -83,6 +83,15 @@ class DataConfig:
     per_window_norm: bool = True   # True = per-window MinMax; False = global scaler
 
 
+@dataclass
+class DecompositionConfig:
+    """Optional decomposition loss weights. 0.0 = disabled (no effect on loss)."""
+    fft_weight:    float = 0.0  # FFT frequency-domain auxiliary loss
+    trend_weight:  float = 0.0  # Moving-average trend component loss
+    season_weight: float = 0.0  # Seasonal residual component loss
+    trend_kernel:  int   = 5    # Avg-pool kernel size for trend extraction
+
+
 class Config:
     """Combined configuration for the entire pipeline."""
     
@@ -92,6 +101,7 @@ class Config:
         self.training = TrainingConfig()
         self.sampling = SamplingConfig()
         self.data = DataConfig()
+        self.decomposition = DecompositionConfig()
     
     def to_dict(self) -> dict:
         """Convert configuration to dictionary for logging."""
@@ -101,6 +111,7 @@ class Config:
             "training": self.training.__dict__,
             "sampling": self.sampling.__dict__,
             "data": self.data.__dict__,
+            "decomposition": self.decomposition.__dict__,
         }
     
     def __repr__(self) -> str:

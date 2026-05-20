@@ -104,7 +104,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, num_metric_samples: int = 128, img_pred_objective: str = None, img_loss_type: str = None):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, num_metric_samples: int = 128, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None):
     """
     Train the diffusion model in specified mode.
 
@@ -124,7 +124,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     set_seed(seed)
 
     # Select config based on mode
-    if mode == "raw":
+    if mode in ("raw", "decomposition"):
         config = RawConfig()
     elif mode == "image":
         config = ImageVersionConfig()
@@ -161,13 +161,24 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     if img_loss_type is not None and hasattr(config.model, 'loss_type'):
         config.model.loss_type = img_loss_type
 
+    # Decomposition loss weights
+    # decomposition mode: sensible defaults; raw mode: only apply if explicitly passed
+    if mode == "decomposition":
+        config.decomposition.fft_weight    = fft_weight    if fft_weight    is not None else 0.1
+        config.decomposition.trend_weight  = trend_weight  if trend_weight  is not None else 0.5
+        config.decomposition.season_weight = season_weight if season_weight is not None else 0.0
+    else:
+        if fft_weight    is not None: config.decomposition.fft_weight    = fft_weight
+        if trend_weight  is not None: config.decomposition.trend_weight  = trend_weight
+        if season_weight is not None: config.decomposition.season_weight = season_weight
+
     if use_wandb:
         import wandb
         _h = config.model.hidden_dim
         _l = config.model.num_layers
         wandb.init(
             project=wandb_project,
-            name=f"train_{mode}_h{_h}_l{_l}",
+            name=wandb_run_name or f"train_{mode}_h{_h}_l{_l}",
             group=f"{mode}_h{_h}_l{_l}",
             job_type="train",
             config=config.to_dict(),
@@ -193,6 +204,13 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
     if mode == "image":
         print(f"   Image embedding: {config.image.embedding_type}")
         print(f"   Image size: {config.image.embedding_dim}x{config.image.embedding_dim}")
+    if mode == "decomposition" or any([
+        config.decomposition.fft_weight, config.decomposition.trend_weight,
+        config.decomposition.season_weight,
+    ]):
+        d = config.decomposition
+        print(f"   Decomposition loss: fft={d.fft_weight}  trend={d.trend_weight}  "
+              f"season={d.season_weight}  kernel={d.trend_kernel}")
     
     # Create optimizer and scheduler
     print("\n3. Setting up optimizer and scheduler...")
@@ -358,9 +376,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train diffusion model in raw or image mode")
     parser.add_argument(
         "--mode",
-        choices=["raw", "image"],
+        choices=["raw", "image", "decomposition"],
         default="raw",
-        help="Training mode: 'raw' (direct TS) or 'image' (via delay embedding)"
+        help="Training mode: 'raw', 'image', or 'decomposition' (raw + trend/FFT loss)"
     )
     parser.add_argument(
         "--device",
@@ -440,6 +458,24 @@ if __name__ == "__main__":
         default=None,
         help="Learning rate (overrides config), e.g. 1e-4"
     )
+    parser.add_argument(
+        "--fft-weight",
+        type=float,
+        default=None,
+        help="FFT auxiliary loss weight (0=off). decomposition mode default: 0.1"
+    )
+    parser.add_argument(
+        "--trend-weight",
+        type=float,
+        default=None,
+        help="Trend loss weight via moving-average decomposition (0=off). decomposition mode default: 0.5"
+    )
+    parser.add_argument(
+        "--season-weight",
+        type=float,
+        default=None,
+        help="Seasonal residual loss weight (0=off). decomposition mode default: 0.0"
+    )
 
     args = parser.parse_args()
 
@@ -463,4 +499,7 @@ if __name__ == "__main__":
         seed=args.seed,
         pos_enc=args.pos_enc,
         lr=args.lr,
+        fft_weight=args.fft_weight,
+        trend_weight=args.trend_weight,
+        season_weight=args.season_weight,
     )
