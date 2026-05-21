@@ -33,6 +33,7 @@ def evaluate(
     pos_enc: str = None,
     use_wandb: bool = False,
     wandb_project: str = "diffusion-timeseries",
+    wandb_run_name: str = None,
 ):
     """
     Evaluate model in specified mode.
@@ -47,7 +48,8 @@ def evaluate(
     set_seed(seed)
 
     # Load config based on mode
-    if mode == "raw":
+    # "decomposition" uses the same Transformer architecture as "raw" — same config
+    if mode in ("raw", "decomposition"):
         config = Config()
     elif mode == "image":
         config = ImageVersionConfig()
@@ -103,10 +105,15 @@ def evaluate(
         import wandb
         _h = config.model.hidden_dim
         _l = config.model.num_layers
+        # Use wandb_run_name if provided (matches training run name so W&B groups them),
+        # otherwise fall back to a descriptive default.
+        _run_name = (f"eval_{wandb_run_name}" if wandb_run_name
+                     else f"eval_{mode}_h{_h}_l{_l}")
+        _group = wandb_run_name or f"{mode}_h{_h}_l{_l}"
         wandb.init(
             project=wandb_project,
-            name=f"eval_{mode}_h{_h}_l{_l}",
-            group=f"{mode}_h{_h}_l{_l}",   # groups train+eval runs together in W&B
+            name=_run_name,
+            group=_group,   # groups train+eval runs together in W&B
             job_type="eval",
             config={
                 "mode": mode,
@@ -285,9 +292,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate model in raw or image mode")
     parser.add_argument(
         "--mode",
-        choices=["raw", "image"],
+        choices=["raw", "image", "decomposition"],
         default="raw",
-        help="Evaluation mode"
+        help="Evaluation mode — 'decomposition' uses same Transformer arch as 'raw'"
     )
     parser.add_argument(
         "--checkpoint",
@@ -356,6 +363,25 @@ if __name__ == "__main__":
         help="Number of transformer layers used during training (overrides config): 3=small, 6=medium, 8=large"
     )
 
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        default=False,
+        help="Log results to Weights & Biases"
+    )
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="diffusion-timeseries",
+        help="W&B project name"
+    )
+    parser.add_argument(
+        "--wandb-run-name",
+        type=str,
+        default=None,
+        help="W&B run name (use the same name as the training run to group them)"
+    )
+
     args = parser.parse_args()
 
     evaluate(
@@ -371,4 +397,7 @@ if __name__ == "__main__":
         num_layers=args.num_layers,
         seed=args.seed,
         pos_enc=args.pos_enc,
+        use_wandb=args.wandb,
+        wandb_project=args.wandb_project,
+        wandb_run_name=args.wandb_run_name,
     )

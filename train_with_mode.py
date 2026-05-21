@@ -61,13 +61,18 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, num_sample
     fake_m = fake_np.transpose(0, 2, 1)
 
     # ── Compute all metrics ─────────────────────────────────────────────────
+    # disc_iterations=500 / pred_iterations=1000 are fast inline versions.
+    # Full evaluation (disc=2000, pred=5000) is done separately after training.
     try:
-        results = evaluate_samples(real_m, fake_m, device=device, n_iterations=n_iterations)
+        results = evaluate_samples(real_m, fake_m, device=device, n_iterations=n_iterations,
+                                   disc_iterations=500, pred_iterations=1000)
         vds  = vds_score(real_m, fake_m)
         fdds = fdds_score(real_m, fake_m)
         corr = correlational_score(real_m, fake_m)
     except Exception as exc:
+        import traceback
         print(f"   [metrics] Error during metric computation: {exc}")
+        traceback.print_exc()
         model.train()
         return None
 
