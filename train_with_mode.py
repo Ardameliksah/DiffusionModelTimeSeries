@@ -79,8 +79,18 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, num_sample
     disc = results["discriminative"]
     pred = results["predictive"]
 
+    # ── Context-FID (separate try/except so failures don't kill other metrics) ─
+    context_fid = None
+    try:
+        from utils.context_fid import Context_FID
+        _ts2vec_device = 0 if device == "cuda" else "cpu"
+        context_fid = Context_FID(real_m, fake_m, device=_ts2vec_device)
+        print(f"   Context-FID: {context_fid:.4f}")
+    except Exception as exc:
+        print(f"   [metrics] Context-FID failed (skipping): {exc}")
+
     model.train()
-    return {
+    out = {
         "disc_score":          disc["mean"],
         "disc_score_std":      disc["std"],
         "test_acc":            disc["test_acc"],
@@ -90,6 +100,9 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, num_sample
         "fdds":                fdds,
         "correlational_score": corr,
     }
+    if context_fid is not None:
+        out["context_fid"] = context_fid
+    return out
 
 
 def get_data_loaders(config):
