@@ -126,26 +126,13 @@ def evaluate(
             },
         )
 
-    # Generate samples
-    print(f"\n3. Generating {num_samples} samples...")
-    with torch.no_grad():
-        samples = model.sample(
-            batch_size=num_samples,
-            sampler_type="ddim",
-            num_steps=config.sampling.num_sampling_steps,
-            eta=config.sampling.eta,
-        )
-    
-    print(f"   Generated shape: {samples.shape}")
-    samples_np = samples.cpu().numpy()
-    
-    # For comparison, load real data
-    print("\n4. Loading real data...")
+    # Load ALL training data — DiffusionTS protocol: full dataset for all metrics
+    print("\n3. Loading all training data (DiffusionTS protocol)...")
     from utils.data_utils import create_data_loaders
-    
-    train_loader, test_loader, _ = create_data_loaders(
+
+    train_loader, _, _ = create_data_loaders(
         csv_path=config.data.data_path,
-        batch_size=num_samples,
+        batch_size=256,
         window_length=config.model.sequence_length,
         neg_one_to_one=config.data.neg_one_to_one,
         train_ratio=config.data.train_split,
@@ -153,9 +140,32 @@ def evaluate(
         per_window=config.data.per_window_norm,
     )
 
-    real_data_batch = next(iter(test_loader)).cpu().numpy()
-    print(f"   Real data shape: {real_data_batch.shape}")
-    
+    all_real_np = np.concatenate(
+        [b.cpu().numpy() for b in train_loader], axis=0
+    )                                                    # (N_train, C, L)
+    N_train = all_real_np.shape[0]
+    print(f"   Real data: {N_train} windows")
+
+    # Generate same number of fake samples (full dataset, single pass)
+    print(f"\n4. Generating {N_train} samples for evaluation...")
+    with torch.no_grad():
+        all_fake = model.sample(
+            batch_size=N_train,
+            sampler_type="ddim",
+            num_steps=config.sampling.num_sampling_steps,
+            eta=config.sampling.eta,
+        )
+    all_fake_np = all_fake.cpu().numpy()                 # (N_train, C, L)
+    print(f"   Generated shape: {all_fake_np.shape}")
+
+    # Subset for visualization / saving (keep manageable)
+    samples_np      = all_fake_np[:num_samples]
+    real_data_batch = all_real_np[:num_samples]
+
+    # Full arrays for all metrics — (N_train, L, C)
+    real_for_metrics = all_real_np.transpose(0, 2, 1)
+    fake_for_metrics = all_fake_np.transpose(0, 2, 1)
+
     # Compute statistics
     print("\n5. Computing statistics...")
     real_stats = compute_statistics(real_data_batch)
@@ -209,13 +219,9 @@ def evaluate(
     
     print(f"   Statistics saved: {stats_save_path}")
 
-    # TimeGAN metrics
-    print(f"\n7. Computing TimeGAN metrics ({n_metric_iterations} iterations each)...")
+    # TimeGAN metrics — full dataset (real_for_metrics / fake_for_metrics already set above)
+    print(f"\n7. Computing TimeGAN metrics ({n_metric_iterations} iterations each, N={N_train})...")
     from eval_metrics import evaluate_samples, vds_score, fdds_score, correlational_score
-
-    # eval_metrics expects (N, seq_len, features) — transpose from (N, features, seq_len)
-    real_for_metrics = real_data_batch.transpose(0, 2, 1)
-    fake_for_metrics = samples_np.transpose(0, 2, 1)
 
     metric_results = evaluate_samples(
         real_for_metrics, fake_for_metrics,
@@ -256,25 +262,9 @@ def evaluate(
         from utils.context_fid import Context_FID
         _ts2vec_device = 0 if device == "cuda" else "cpu"
 
-        # Use ALL training data — matches DiffusionTS protocol exactly.
-        # TS2Vec is trained on the training distribution; N_train >> 320 (repr dim) → full-rank covariance.
-        print(f"   Collecting all training data...")
-        train_batches = [_b.cpu().numpy() for _b in train_loader]
-        all_train_np = np.concatenate(train_batches, axis=0)     # (N_train, C, L)
-        all_train_m  = all_train_np.transpose(0, 2, 1)           # (N_train, L, C)
-
-        print(f"   Generating {all_train_np.shape[0]} fake samples to match training set size...")
-        with torch.no_grad():
-            all_fake = model.sample(
-                batch_size=all_train_np.shape[0],
-                sampler_type="ddim",
-                num_steps=config.sampling.num_sampling_steps,
-                eta=config.sampling.eta,
-            ).cpu().numpy()
-        all_fake_m = all_fake.transpose(0, 2, 1)                 # (N_train, L, C)
-
-        context_fid = Context_FID(all_train_m, all_fake_m, device=_ts2vec_device)
-        print(f"   Context-FID: {context_fid:.4f}  (lower = better, N_train={all_train_np.shape[0]})")
+        # Reuse the full-dataset arrays already collected above — no extra generation needed
+        context_fid = Context_FID(real_for_metrics, fake_for_metrics, device=_ts2vec_device)
+        print(f"   Context-FID: {context_fid:.4f}  (lower = better, N={N_train})")
         with open(stats_save_path, 'a') as f:
             f.write(f"  context_fid: {context_fid:.4f}\n")
         print(f"   Metrics appended to: {stats_save_path}")
