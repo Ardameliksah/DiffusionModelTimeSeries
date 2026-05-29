@@ -8,6 +8,13 @@ from utils.ts2vec.ts2vec import TS2Vec
 _DEFAULT_WEIGHTS = Path(__file__).parent / "ts2vec_weights_stocks.pt"
 
 
+def _device_str(device) -> str:
+    """Normalise device to a string — torch.load map_location must be str, not int."""
+    if isinstance(device, int):
+        return f"cuda:{device}"
+    return str(device)
+
+
 def calculate_fid(act1, act2):
     mu1, sigma1 = act1.mean(axis=0), np.cov(act1, rowvar=False)
     mu2, sigma2 = act2.mean(axis=0), np.cov(act2, rowvar=False)
@@ -18,7 +25,7 @@ def calculate_fid(act1, act2):
     return ssdiff + np.trace(sigma1 + sigma2 - 2.0 * covmean)
 
 
-def Context_FID(ori_data, generated_data, device=0):
+def Context_FID(ori_data, generated_data, device="cuda"):
     """
     Compute Context-FID between real and generated time series.
 
@@ -28,11 +35,14 @@ def Context_FID(ori_data, generated_data, device=0):
     Args:
         ori_data:        (N, seq_len, features) numpy array — real data
         generated_data:  (N, seq_len, features) numpy array — generated data
-        device:          GPU device index (int) or 'cpu'
+        device:          "cuda", "cpu", or "cuda:N" — NOT an integer (torch.load
+                         requires a string map_location, not an int)
 
     Returns:
         Scalar FID score (lower = better)
     """
+    device = _device_str(device)   # ensure string, never int
+
     model = TS2Vec(
         input_dims=ori_data.shape[-1],
         device=device,

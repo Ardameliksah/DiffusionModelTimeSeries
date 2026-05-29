@@ -84,7 +84,7 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, train_load
     _cfid_loader = train_loader if train_loader is not None else test_loader
     try:
         from utils.context_fid import Context_FID
-        _ts2vec_device = 0 if device == "cuda" else "cpu"
+        _ts2vec_device = "cuda" if device == "cuda" else "cpu"
 
         all_batches = [_b.cpu().numpy() for _b in _cfid_loader]
         all_real_np = np.concatenate(all_batches, axis=0)      # (N, C, L)

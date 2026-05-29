@@ -260,7 +260,7 @@ def evaluate(
     if compute_context_fid:
         print(f"\n9. Computing Context-FID score (TS2Vec encoder, trains ~30-60s)...")
         from utils.context_fid import Context_FID
-        _ts2vec_device = 0 if device == "cuda" else "cpu"
+        _ts2vec_device = "cuda" if device == "cuda" else "cpu"
 
         # Reuse the full-dataset arrays already collected above — no extra generation needed
         context_fid = Context_FID(real_for_metrics, fake_for_metrics, device=_ts2vec_device)
