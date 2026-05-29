@@ -34,6 +34,7 @@ def evaluate(
     use_wandb: bool = False,
     wandb_project: str = "diffusion-timeseries",
     wandb_run_name: str = None,
+    wandb_group: str = None,
 ):
     """
     Evaluate model in specified mode.
@@ -109,7 +110,7 @@ def evaluate(
         # otherwise fall back to a descriptive default.
         _run_name = (f"eval_{wandb_run_name}" if wandb_run_name
                      else f"eval_{mode}_h{_h}_l{_l}")
-        _group = wandb_run_name or f"{mode}_h{_h}_l{_l}"
+        _group = wandb_group or wandb_run_name or f"{mode}_h{_h}_l{_l}"
         wandb.init(
             project=wandb_project,
             name=_run_name,

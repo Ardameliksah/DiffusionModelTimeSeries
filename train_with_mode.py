@@ -109,7 +109,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, num_metric_samples: int = 128, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, num_metric_samples: int = 128, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None):
     """
     Train the diffusion model in specified mode.
 
@@ -185,7 +185,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         wandb.init(
             project=wandb_project,
             name=wandb_run_name or f"train_{mode}_h{_h}_l{_l}",
-            group=f"{mode}_h{_h}_l{_l}",
+            group=wandb_group or f"{mode}_h{_h}_l{_l}",
             job_type="train",
             config=config.to_dict(),
         )
