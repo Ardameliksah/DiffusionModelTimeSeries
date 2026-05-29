@@ -251,13 +251,10 @@ def evaluate(
         f.write(f"  correlational_score: {corr:.4f}\n")
 
     if compute_context_fid:
-        print(f"\n9. Computing Context-FID score (TS2Vec encoder)...")
-        import sys as _sys
-        _diffts_path = str(Path(__file__).parent.parent / "Diffusion-TS")
-        if _diffts_path not in _sys.path:
-            _sys.path.insert(0, _diffts_path)
-        from Utils.context_fid import Context_FID
-        context_fid = Context_FID(real_for_metrics, fake_for_metrics)
+        print(f"\n9. Computing Context-FID score (TS2Vec encoder, trains ~30-60s)...")
+        from utils.context_fid import Context_FID
+        _ts2vec_device = 0 if device == "cuda" else "cpu"
+        context_fid = Context_FID(real_for_metrics, fake_for_metrics, device=_ts2vec_device)
         print(f"   Context-FID: {context_fid:.4f}  (lower = better)")
         with open(stats_save_path, 'a') as f:
             f.write(f"  context_fid: {context_fid:.4f}\n")
