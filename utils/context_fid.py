@@ -1,7 +1,11 @@
 import scipy
 import numpy as np
+from pathlib import Path
 
 from utils.ts2vec.ts2vec import TS2Vec
+
+# Cached weights produced by pretrain_ts2vec.py — same directory as this file
+_DEFAULT_WEIGHTS = Path(__file__).parent / "ts2vec_weights_stocks.pt"
 
 
 def calculate_fid(act1, act2):
@@ -17,6 +21,9 @@ def calculate_fid(act1, act2):
 def Context_FID(ori_data, generated_data, device=0):
     """
     Compute Context-FID between real and generated time series.
+
+    TS2Vec is loaded from cached weights if available (run pretrain_ts2vec.py once
+    to generate them). Falls back to training from scratch if not found.
 
     Args:
         ori_data:        (N, seq_len, features) numpy array — real data
@@ -34,7 +41,15 @@ def Context_FID(ori_data, generated_data, device=0):
         output_dims=320,
         max_train_length=3000,
     )
-    model.fit(ori_data, verbose=False)
+
+    if _DEFAULT_WEIGHTS.exists():
+        model.load(str(_DEFAULT_WEIGHTS))
+        print(f"   TS2Vec: loaded cached weights ({_DEFAULT_WEIGHTS.name})")
+    else:
+        print("   TS2Vec: no cached weights — training from scratch (~30-60s). "
+              "Run pretrain_ts2vec.py once to cache.")
+        model.fit(ori_data, verbose=False)
+
     ori_repr = model.encode(ori_data, encoding_window='full_series')
     gen_repr = model.encode(generated_data, encoding_window='full_series')
     idx = np.random.permutation(ori_data.shape[0])
