@@ -20,7 +20,7 @@ from utils import Trainer, create_optimizer_and_scheduler, TrainingLogger, save_
 from utils.data_utils import create_data_loaders
 
 
-def _compute_inline_metrics(model, test_loader, device, n_iterations, num_samples):
+def _compute_inline_metrics(model, test_loader, device, n_iterations, num_samples, train_loader=None):
     """
     Generate samples and compute discriminative / predictive / VDS / FDDS / corr
     against real test data. Called mid-training at validation checkpoints.
@@ -79,13 +79,29 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, num_sample
     disc = results["discriminative"]
     pred = results["predictive"]
 
-    # ── Context-FID (separate try/except so failures don't kill other metrics) ─
+    # ── Context-FID — matches DiffusionTS protocol: use all training data ───────
+    # disc/pred/vds/fdds use num_samples (fast); Context-FID needs N > repr_dim=320
+    # and must use train data to match the DiffusionTS paper protocol.
+    # TS2Vec uses cached weights (pretrain_ts2vec.py) — no retraining here.
     context_fid = None
+    _cfid_loader = train_loader if train_loader is not None else test_loader
     try:
         from utils.context_fid import Context_FID
         _ts2vec_device = 0 if device == "cuda" else "cpu"
-        context_fid = Context_FID(real_m, fake_m, device=_ts2vec_device)
-        print(f"   Context-FID: {context_fid:.4f}")
+
+        all_batches = [_b.cpu().numpy() for _b in _cfid_loader]
+        all_real_np = np.concatenate(all_batches, axis=0)      # (N, C, L)
+        all_real_m  = all_real_np.transpose(0, 2, 1)           # (N, L, C)
+
+        with torch.no_grad():
+            all_fake_np = model.sample(
+                batch_size=all_real_np.shape[0],
+                sampler_type="ddim", num_steps=50, eta=0.0,
+            ).cpu().numpy()
+        all_fake_m = all_fake_np.transpose(0, 2, 1)
+
+        context_fid = Context_FID(all_real_m, all_fake_m, device=_ts2vec_device)
+        print(f"   Context-FID: {context_fid:.4f}  (N={all_real_np.shape[0]})")
     except Exception as exc:
         print(f"   [metrics] Context-FID failed (skipping): {exc}")
 
@@ -308,6 +324,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
                 model, test_loader, device,
                 n_iterations=n_metric_iterations,
                 num_samples=num_metric_samples,
+                train_loader=train_loader,
             )
             if inline_metrics is not None:
                 print(
