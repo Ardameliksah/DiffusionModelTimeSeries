@@ -143,7 +143,7 @@ def evaluate(
     print("\n4. Loading real data...")
     from utils.data_utils import create_data_loaders
     
-    _, test_loader, _ = create_data_loaders(
+    train_loader, test_loader, _ = create_data_loaders(
         csv_path=config.data.data_path,
         batch_size=num_samples,
         window_length=config.model.sequence_length,
@@ -152,7 +152,7 @@ def evaluate(
         num_workers=0,
         per_window=config.data.per_window_norm,
     )
-    
+
     real_data_batch = next(iter(test_loader)).cpu().numpy()
     print(f"   Real data shape: {real_data_batch.shape}")
     
@@ -255,8 +255,26 @@ def evaluate(
         print(f"\n9. Computing Context-FID score (TS2Vec encoder, trains ~30-60s)...")
         from utils.context_fid import Context_FID
         _ts2vec_device = 0 if device == "cuda" else "cpu"
-        context_fid = Context_FID(real_for_metrics, fake_for_metrics, device=_ts2vec_device)
-        print(f"   Context-FID: {context_fid:.4f}  (lower = better)")
+
+        # Use ALL training data — matches DiffusionTS protocol exactly.
+        # TS2Vec is trained on the training distribution; N_train >> 320 (repr dim) → full-rank covariance.
+        print(f"   Collecting all training data...")
+        train_batches = [_b.cpu().numpy() for _b in train_loader]
+        all_train_np = np.concatenate(train_batches, axis=0)     # (N_train, C, L)
+        all_train_m  = all_train_np.transpose(0, 2, 1)           # (N_train, L, C)
+
+        print(f"   Generating {all_train_np.shape[0]} fake samples to match training set size...")
+        with torch.no_grad():
+            all_fake = model.sample(
+                batch_size=all_train_np.shape[0],
+                sampler_type="ddim",
+                num_steps=config.sampling.num_sampling_steps,
+                eta=config.sampling.eta,
+            ).cpu().numpy()
+        all_fake_m = all_fake.transpose(0, 2, 1)                 # (N_train, L, C)
+
+        context_fid = Context_FID(all_train_m, all_fake_m, device=_ts2vec_device)
+        print(f"   Context-FID: {context_fid:.4f}  (lower = better, N_train={all_train_np.shape[0]})")
         with open(stats_save_path, 'a') as f:
             f.write(f"  context_fid: {context_fid:.4f}\n")
         print(f"   Metrics appended to: {stats_save_path}")
