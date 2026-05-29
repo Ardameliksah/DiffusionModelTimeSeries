@@ -90,12 +90,18 @@ class StockDataset(Dataset):
         windows = np.array(windows, dtype=np.float32)
 
         # --- temporal split ---------------------------------------------------
-        split = int(len(windows) * train_ratio)
+        # train_ratio=1.0 (DiffusionTS protocol): all data used for training;
+        # test_windows mirrors train_windows so evaluation also uses all data.
+        split = int(len(windows) * min(train_ratio, 1.0))
         self.train_windows = torch.from_numpy(windows[:split])
-        self.test_windows = torch.from_numpy(windows[split:])
-
-        print(f"StockDataset: {len(windows)} windows  "
-              f"(train={len(self.train_windows)}, test={len(self.test_windows)})")
+        if train_ratio >= 1.0:
+            self.test_windows = self.train_windows   # no held-out set
+            print(f"StockDataset: {len(windows)} windows  "
+                  f"(train={len(self.train_windows)}, test=all [train_ratio=1.0])")
+        else:
+            self.test_windows = torch.from_numpy(windows[split:])
+            print(f"StockDataset: {len(windows)} windows  "
+                  f"(train={len(self.train_windows)}, test={len(self.test_windows)})")
 
     # ------ public helpers ---------------------------------------------------
 

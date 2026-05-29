@@ -70,9 +70,9 @@ class SamplingConfig:
 class DataConfig:
     """Data loading hyperparameters."""
     data_path: str = str(_ROOT / "dataset" / "stocks_data.csv")
-    train_split: float = 0.8
-    val_split: float = 0.1
-    test_split: float = 0.1
+    train_split: float = 1.0   # 1.0 = all data for training (DiffusionTS protocol)
+    val_split: float = 0.0
+    test_split: float = 0.0
     num_workers: int = 0  # Set to 0 on Windows to avoid multiprocessing overhead
     pin_memory: bool = True
     normalize: bool = True

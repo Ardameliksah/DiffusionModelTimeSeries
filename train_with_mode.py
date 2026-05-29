@@ -20,7 +20,7 @@ from utils import Trainer, create_optimizer_and_scheduler, TrainingLogger, save_
 from utils.data_utils import create_data_loaders
 
 
-def _compute_inline_metrics(model, test_loader, device, n_iterations, num_samples, train_loader=None):
+def _compute_inline_metrics(model, test_loader, device, n_iterations, train_loader=None):
     """
     Generate samples and compute discriminative / predictive / VDS / FDDS / corr
     against real test data. Called mid-training at validation checkpoints.
@@ -36,22 +36,19 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, num_sample
 
     model.eval()
 
-    # ── Collect real test data ──────────────────────────────────────────────
-    real_batches, collected = [], 0
+    # ── Collect ALL real data (DiffusionTS protocol: full dataset, no cap) ────
+    real_batches = []
     with torch.no_grad():
         for batch in test_loader:
             real_batches.append(batch.cpu().numpy())
-            collected += batch.shape[0]
-            if collected >= num_samples:
-                break
     if not real_batches:
         model.train()
         return None
 
-    real_np = np.concatenate(real_batches, axis=0)[:num_samples]   # (N, C, L)
+    real_np = np.concatenate(real_batches, axis=0)    # (N, C, L) — full dataset
     n = real_np.shape[0]
 
-    # ── Generate fake samples ───────────────────────────────────────────────
+    # ── Generate same number of fake samples ───────────────────────────────
     with torch.no_grad():
         fake_np = model.sample(batch_size=n, sampler_type="ddim",
                                num_steps=50, eta=0.0).cpu().numpy()   # (N, C, L)
@@ -65,7 +62,7 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, num_sample
     # Full evaluation (disc=2000, pred=5000) is done separately after training.
     try:
         results = evaluate_samples(real_m, fake_m, device=device, n_iterations=n_iterations,
-                                   disc_iterations=500, pred_iterations=1000)
+                                   disc_iterations=2000, pred_iterations=5000)
         vds  = vds_score(real_m, fake_m)
         fdds = fdds_score(real_m, fake_m)
         corr = correlational_score(real_m, fake_m)
@@ -323,7 +320,6 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
             inline_metrics = _compute_inline_metrics(
                 model, test_loader, device,
                 n_iterations=n_metric_iterations,
-                num_samples=num_metric_samples,
                 train_loader=train_loader,
             )
             if inline_metrics is not None:
