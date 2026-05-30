@@ -48,7 +48,7 @@ def _plot_tsne_pca(real_np, fake_np, output_dir, mode, use_wandb=False):
     # ── t-SNE ─────────────────────────────────────────────────────────────
     print(f"   Running t-SNE on {2*N} samples (may take 1-3 min)...")
     tsne  = TSNE(n_components=2, perplexity=40, random_state=42,
-                 n_iter=1000, n_jobs=-1)
+                 max_iter=1000, n_jobs=-1)
     c2    = tsne.fit_transform(c50)
     axes[1].scatter(c2[:N, 0], c2[:N, 1], **kw_real)
     axes[1].scatter(c2[N:, 0], c2[N:, 1], **kw_fake)
