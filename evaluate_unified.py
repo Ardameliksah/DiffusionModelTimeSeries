@@ -11,6 +11,66 @@ import numpy as np
 from pathlib import Path
 import sys
 
+
+def _plot_tsne_pca(real_np, fake_np, output_dir, mode, use_wandb=False):
+    """
+    PCA and t-SNE scatter plots: real (blue) vs generated (red).
+    real_np / fake_np shape: (N, C, L) — channels-first.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    from sklearn.manifold import TSNE
+
+    N = min(real_np.shape[0], fake_np.shape[0])
+    real_flat = real_np[:N].reshape(N, -1)   # (N, C*L)
+    fake_flat = fake_np[:N].reshape(N, -1)   # (N, C*L)
+    combined  = np.concatenate([real_flat, fake_flat], axis=0)  # (2N, C*L)
+
+    # PCA to 50 dims first (speeds up t-SNE, avoids curse of dimensionality)
+    n_pca = min(50, combined.shape[1])
+    pca   = PCA(n_components=n_pca, random_state=42)
+    c50   = pca.fit_transform(combined)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    kw_real = dict(c="steelblue", alpha=0.25, s=4, label="Real")
+    kw_fake = dict(c="tomato",    alpha=0.25, s=4, label="Generated")
+
+    # ── PCA (first 2 components) ───────────────────────────────────────────
+    axes[0].scatter(c50[:N, 0], c50[:N, 1], **kw_real)
+    axes[0].scatter(c50[N:, 0], c50[N:, 1], **kw_fake)
+    axes[0].set_title(f"PCA — {mode}")
+    axes[0].set_xlabel("PC 1")
+    axes[0].set_ylabel("PC 2")
+    axes[0].legend(markerscale=4, fontsize=9)
+
+    # ── t-SNE ─────────────────────────────────────────────────────────────
+    print(f"   Running t-SNE on {2*N} samples (may take 1-3 min)...")
+    tsne  = TSNE(n_components=2, perplexity=40, random_state=42,
+                 n_iter=1000, n_jobs=-1)
+    c2    = tsne.fit_transform(c50)
+    axes[1].scatter(c2[:N, 0], c2[:N, 1], **kw_real)
+    axes[1].scatter(c2[N:, 0], c2[N:, 1], **kw_fake)
+    axes[1].set_title(f"t-SNE — {mode}")
+    axes[1].set_xlabel("Dim 1")
+    axes[1].set_ylabel("Dim 2")
+    axes[1].legend(markerscale=4, fontsize=9)
+
+    plt.suptitle(f"Real vs Generated  |  {mode}  (N={N})", fontsize=12)
+    plt.tight_layout()
+
+    save_path = Path(output_dir) / f"tsne_pca_{mode}.png"
+    fig.savefig(save_path, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    print(f"   t-SNE/PCA plot saved: {save_path}")
+
+    if use_wandb:
+        import wandb
+        wandb.log({"tsne_pca": wandb.Image(str(save_path))})
+
+    return save_path
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import Config, ImageVersionConfig
@@ -102,29 +162,31 @@ def evaluate(
     print(f"   Model type: {mode}")
     print(f"   Device: {device}")
 
+    _wandb_run_started = False
     if use_wandb:
         import wandb
-        _h = config.model.hidden_dim
-        _l = config.model.num_layers
-        # Use wandb_run_name if provided (matches training run name so W&B groups them),
-        # otherwise fall back to a descriptive default.
-        _run_name = (f"eval_{wandb_run_name}" if wandb_run_name
-                     else f"eval_{mode}_h{_h}_l{_l}")
-        _group = wandb_group or wandb_run_name or f"{mode}_h{_h}_l{_l}"
-        wandb.init(
-            project=wandb_project,
-            name=_run_name,
-            group=_group,   # groups train+eval runs together in W&B
-            job_type="eval",
-            config={
-                "mode": mode,
-                "num_samples": num_samples,
-                "n_metric_iterations": n_metric_iterations,
-                "checkpoint_path": str(checkpoint_path) if checkpoint_path else None,
-                "hidden_dim": _h,
-                "num_layers": _l,
-            },
-        )
+        if wandb.run is None:
+            # No active run — start a standalone eval run
+            _h = config.model.hidden_dim
+            _l = config.model.num_layers
+            _run_name = (f"eval_{wandb_run_name}" if wandb_run_name
+                         else f"eval_{mode}_h{_h}_l{_l}")
+            _group = wandb_group or wandb_run_name or f"{mode}_h{_h}_l{_l}"
+            wandb.init(
+                project=wandb_project,
+                name=_run_name,
+                group=_group,
+                job_type="eval",
+                config={
+                    "mode": mode,
+                    "num_samples": num_samples,
+                    "n_metric_iterations": n_metric_iterations,
+                    "checkpoint_path": str(checkpoint_path) if checkpoint_path else None,
+                },
+            )
+            _wandb_run_started = True
+        else:
+            print(f"   W&B: logging eval metrics to existing run '{wandb.run.name}'")
 
     # Load ALL training data — DiffusionTS protocol: full dataset for all metrics
     print("\n3. Loading all training data (DiffusionTS protocol)...")
@@ -286,10 +348,17 @@ def evaluate(
         except Exception as exc:
             print(f"   [eval] Context-FID failed: {exc}")
 
+    # ── t-SNE / PCA visualisation ─────────────────────────────────────────────
+    try:
+        _plot_tsne_pca(all_real_np, all_fake_np, output_dir, mode,
+                       use_wandb=use_wandb)
+    except Exception as exc:
+        print(f"   [eval] t-SNE/PCA failed (skipping): {exc}")
+
     if use_wandb:
         import wandb
         wandb.finish()
-        print("   W&B eval run finished.")
+        print("   W&B run finished.")
 
     print("\n" + "=" * 80)
     print(f"Evaluation complete! ({mode} mode)")

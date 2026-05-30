@@ -135,7 +135,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None, finish_wandb: bool = True):
     """
     Train the diffusion model in specified mode.
 
@@ -353,13 +353,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         else:
             print(f"Epoch {epoch+1:3d} | Train: {train_loss:.4f}")
 
-        # Save checkpoint periodically
-        if (epoch + 1) % config.training.save_every_n_epochs == 0:
-            save_checkpoint(model, optimizer, epoch, train_loss,
-                            checkpoint_dir=config.training.checkpoint_dir,
-                            filename=f"checkpoint_epoch_{epoch+1}.pt",
-                            model_config=saved_model_config)
-            print(f"   Checkpoint saved: {config.training.checkpoint_dir}/checkpoint_epoch_{epoch+1}.pt")
+        # Periodic epoch checkpoints removed — only best_model.pt is kept
     
     # ── Loss curve plot ───────────────────────────────────────────────────────
     import matplotlib
@@ -394,7 +388,8 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
 
     if use_wandb:
         wandb.log({"loss_curve": wandb.Image(str(plot_path))})
-        wandb.finish()
+        if finish_wandb:
+            wandb.finish()
     # ─────────────────────────────────────────────────────────────────────────
 
     print("\n" + "=" * 80)
