@@ -219,74 +219,77 @@ def evaluate(
     
     print(f"   Statistics saved: {stats_save_path}")
 
-    # TimeGAN metrics — full dataset (real_for_metrics / fake_for_metrics already set above)
-    print(f"\n7. Computing TimeGAN metrics ({n_metric_iterations} iterations each, N={N_train})...")
+    # ── Metrics — log to W&B immediately after each group so partial runs have data ──
     from eval_metrics import evaluate_samples, vds_score, fdds_score, correlational_score
 
-    metric_results = evaluate_samples(
-        real_for_metrics, fake_for_metrics,
-        device=device,
-        n_iterations=n_metric_iterations,
-    )
+    try:
+        # TimeGAN metrics
+        print(f"\n7. Computing TimeGAN metrics ({n_metric_iterations} iterations each, N={N_train})...")
+        metric_results = evaluate_samples(
+            real_for_metrics, fake_for_metrics,
+            device=device,
+            n_iterations=n_metric_iterations,
+        )
+        disc = metric_results["discriminative"]
+        pred = metric_results["predictive"]
+        print(f"\n   Discriminative score : {disc['mean']:.4f} +/- {disc['std']:.4f}  (target: 0.0)")
+        print(f"   Test accuracy        : {disc['test_acc']:.4f}  (target: 0.5)")
+        print(f"   Predictive MAE       : {pred['mean']:.4f} +/- {pred['std']:.4f}  (lower = better)")
+        with open(stats_save_path, 'a') as f:
+            f.write("\nTimeGAN Metrics:\n")
+            f.write(f"  discriminative_score: {disc['mean']:.4f} +/- {disc['std']:.4f}\n")
+            f.write(f"  test_accuracy: {disc['test_acc']:.4f}\n")
+            f.write(f"  predictive_mae: {pred['mean']:.4f} +/- {pred['std']:.4f}\n")
+        if use_wandb:
+            import wandb
+            wandb.log({
+                "disc_score":     disc["mean"],
+                "disc_score_std": disc["std"],
+                "test_acc":       disc["test_acc"],
+                "pred_mae":       pred["mean"],
+                "pred_mae_std":   pred["std"],
+            })
+    except Exception as exc:
+        print(f"   [eval] TimeGAN metrics failed: {exc}")
 
-    disc = metric_results["discriminative"]
-    pred = metric_results["predictive"]
-    print(f"\n   Discriminative score : {disc['mean']:.4f} +/- {disc['std']:.4f}  (target: 0.0)")
-    print(f"   Test accuracy        : {disc['test_acc']:.4f}  (target: 0.5)")
-    print(f"   Predictive MAE       : {pred['mean']:.4f} +/- {pred['std']:.4f}  (lower = better)")
-
-    # Append metrics to the stats file
-    with open(stats_save_path, 'a') as f:
-        f.write("\nTimeGAN Metrics:\n")
-        f.write(f"  discriminative_score: {disc['mean']:.4f} +/- {disc['std']:.4f}\n")
-        f.write(f"  test_accuracy: {disc['test_acc']:.4f}\n")
-        f.write(f"  predictive_mae: {pred['mean']:.4f} +/- {pred['std']:.4f}\n")
-    print(f"   Metrics appended to: {stats_save_path}")
-
-    # VDS, FDDS, Correlational Score
-    print(f"\n8. Computing VDS / FDDS / Correlational Score...")
-    vds   = vds_score(real_for_metrics, fake_for_metrics)
-    fdds  = fdds_score(real_for_metrics, fake_for_metrics)
-    corr  = correlational_score(real_for_metrics, fake_for_metrics)
-    print(f"   VDS   : {vds:.4f}  (lower = better, KL divergence of value distributions)")
-    print(f"   FDDS  : {fdds:.4f}  (lower = better, KL divergence of cross-corr distributions)")
-    print(f"   Corr  : {corr:.4f}  (lower = better, |cacf_fake - cacf_real| / 10)")
-    with open(stats_save_path, 'a') as f:
-        f.write(f"\nPaD-TS / Diffusion-TS Metrics:\n")
-        f.write(f"  vds: {vds:.4f}\n")
-        f.write(f"  fdds: {fdds:.4f}\n")
-        f.write(f"  correlational_score: {corr:.4f}\n")
+    try:
+        # VDS, FDDS, Correlational Score
+        print(f"\n8. Computing VDS / FDDS / Correlational Score...")
+        vds  = vds_score(real_for_metrics, fake_for_metrics)
+        fdds = fdds_score(real_for_metrics, fake_for_metrics)
+        corr = correlational_score(real_for_metrics, fake_for_metrics)
+        print(f"   VDS   : {vds:.4f}  (lower = better)")
+        print(f"   FDDS  : {fdds:.4f}  (lower = better)")
+        print(f"   Corr  : {corr:.4f}  (lower = better)")
+        with open(stats_save_path, 'a') as f:
+            f.write(f"\nPaD-TS / Diffusion-TS Metrics:\n")
+            f.write(f"  vds: {vds:.4f}\n  fdds: {fdds:.4f}\n  correlational_score: {corr:.4f}\n")
+        if use_wandb:
+            import wandb
+            wandb.log({"vds": vds, "fdds": fdds, "correlational_score": corr,
+                       "comparison_plot": wandb.Image(str(save_path))})
+    except Exception as exc:
+        print(f"   [eval] VDS/FDDS/Corr failed: {exc}")
 
     if compute_context_fid:
-        print(f"\n9. Computing Context-FID score (TS2Vec encoder, trains ~30-60s)...")
-        from utils.context_fid import Context_FID
-        _ts2vec_device = "cuda" if device == "cuda" else "cpu"
-
-        # Reuse the full-dataset arrays already collected above — no extra generation needed
-        context_fid = Context_FID(real_for_metrics, fake_for_metrics, device=_ts2vec_device)
-        print(f"   Context-FID: {context_fid:.4f}  (lower = better, N={N_train})")
-        with open(stats_save_path, 'a') as f:
-            f.write(f"  context_fid: {context_fid:.4f}\n")
-        print(f"   Metrics appended to: {stats_save_path}")
+        try:
+            print(f"\n9. Computing Context-FID score (TS2Vec, cached weights)...")
+            from utils.context_fid import Context_FID
+            _ts2vec_device = "cuda" if device == "cuda" else "cpu"
+            context_fid = Context_FID(real_for_metrics, fake_for_metrics, device=_ts2vec_device)
+            print(f"   Context-FID: {context_fid:.4f}  (lower = better, N={N_train})")
+            with open(stats_save_path, 'a') as f:
+                f.write(f"  context_fid: {context_fid:.4f}\n")
+            if use_wandb:
+                import wandb
+                wandb.log({"context_fid": context_fid})
+        except Exception as exc:
+            print(f"   [eval] Context-FID failed: {exc}")
 
     if use_wandb:
         import wandb
-        _eval_log = {
-            "disc_score":          disc["mean"],
-            "disc_score_std":      disc["std"],
-            "test_acc":            disc["test_acc"],
-            "pred_mae":            pred["mean"],
-            "pred_mae_std":        pred["std"],
-            "vds":                 vds,
-            "fdds":                fdds,
-            "correlational_score": corr,
-            "comparison_plot":     wandb.Image(str(save_path)),
-        }
-        if compute_context_fid:
-            _eval_log["context_fid"] = context_fid
-        wandb.log(_eval_log)
         wandb.finish()
-        print("   W&B run finished — metrics logged.")
+        print("   W&B eval run finished.")
 
     print("\n" + "=" * 80)
     print(f"Evaluation complete! ({mode} mode)")
