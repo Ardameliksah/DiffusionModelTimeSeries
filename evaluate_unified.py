@@ -227,6 +227,10 @@ def evaluate(
     # Full arrays for all metrics — (N_train, L, C)
     real_for_metrics = all_real_np.transpose(0, 2, 1)
     fake_for_metrics = all_fake_np.transpose(0, 2, 1)
+    # Convert [-1,1] → [0,1] to match baseline evaluation convention
+    # (Diffusion-TS main.py:93, PaD-TS eval_run.py:42/73/99/154 all do this before metrics)
+    real_for_metrics = (real_for_metrics + 1) * 0.5
+    fake_for_metrics = (fake_for_metrics + 1) * 0.5
 
     # Compute statistics
     print("\n5. Computing statistics...")

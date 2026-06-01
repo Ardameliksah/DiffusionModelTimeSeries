@@ -60,6 +60,8 @@ class DiffusionModel(nn.Module):
         self.trend_weight  = trend_weight
         self.season_weight = season_weight
         self.trend_kernel  = trend_kernel
+        self._epoch_fft_sum   = 0.0
+        self._epoch_fft_count = 0
 
         # Initialize transformer model
         self.transformer = TransformerDiffusionModel(
@@ -142,6 +144,8 @@ class DiffusionModel(nn.Module):
             fft_true = torch.fft.rfft(target_x0,    dim=2, norm='forward')
             fft_loss = (nn.functional.l1_loss(fft_pred.real, fft_true.real)
                       + nn.functional.l1_loss(fft_pred.imag, fft_true.imag))
+            self._epoch_fft_sum   += fft_loss.item()
+            self._epoch_fft_count += 1
             total = total + self.fft_weight * fft_loss
 
         # ── Optional trend / seasonal loss ────────────────────────────────────

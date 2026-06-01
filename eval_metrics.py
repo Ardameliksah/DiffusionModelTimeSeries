@@ -41,7 +41,7 @@ class _Predictor(nn.Module):
     def forward(self, x):
         outputs, _ = self.gru(x)          # (batch, seq_len, hidden_dim)
         logit = self.fc(outputs)          # (batch, seq_len, 1)
-        return torch.tanh(logit)
+        return torch.sigmoid(logit)
 
 
 # ---------------------------------------------------------------------------

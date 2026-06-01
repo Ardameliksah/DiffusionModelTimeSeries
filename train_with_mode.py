@@ -54,8 +54,8 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, train_load
                                num_steps=50, eta=0.0).cpu().numpy()   # (N, C, L)
 
     # eval_metrics expects (N, L, C)
-    real_m = real_np.transpose(0, 2, 1)
-    fake_m = fake_np.transpose(0, 2, 1)
+    real_m = (real_np.transpose(0, 2, 1) + 1) * 0.5
+    fake_m = (fake_np.transpose(0, 2, 1) + 1) * 0.5
 
     # ── Compute all metrics ─────────────────────────────────────────────────
     # disc_iterations=500 / pred_iterations=1000 are fast inline versions.
@@ -88,14 +88,14 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, train_load
 
         all_batches = [_b.cpu().numpy() for _b in _cfid_loader]
         all_real_np = np.concatenate(all_batches, axis=0)      # (N, C, L)
-        all_real_m  = all_real_np.transpose(0, 2, 1)           # (N, L, C)
+        all_real_m  = (all_real_np.transpose(0, 2, 1) + 1) * 0.5  # (N, L, C)
 
         with torch.no_grad():
             all_fake_np = model.sample(
                 batch_size=all_real_np.shape[0],
                 sampler_type="ddim", num_steps=50, eta=0.0,
             ).cpu().numpy()
-        all_fake_m = all_fake_np.transpose(0, 2, 1)
+        all_fake_m = (all_fake_np.transpose(0, 2, 1) + 1) * 0.5
 
         context_fid = Context_FID(all_real_m, all_fake_m, device=_ts2vec_device)
         print(f"   Context-FID: {context_fid:.4f}  (N={all_real_np.shape[0]})")
@@ -135,7 +135,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None, finish_wandb: bool = True):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, num_heads: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None, finish_wandb: bool = True):
     """
     Train the diffusion model in specified mode.
 
@@ -182,6 +182,8 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         config.model.ff_dim = hidden_dim * 4  # keep standard 4x ratio
     if num_layers is not None:
         config.model.num_layers = num_layers
+    if num_heads is not None:
+        config.model.num_heads = num_heads
     if pos_enc is not None:
         config.model.learnable_pos_enc = (pos_enc == "learnable")
     if num_workers is not None:
@@ -293,7 +295,11 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
 
     for epoch in range(start_epoch, config.training.num_epochs):
         # Training
+        dm = model.get_diffusion_model()
+        dm._epoch_fft_sum   = 0.0
+        dm._epoch_fft_count = 0
         train_loss = trainer.train_epoch(train_loader)
+        avg_fft_loss = dm._epoch_fft_sum / max(1, dm._epoch_fft_count)
 
         # Validation
         val_loss = None
@@ -340,6 +346,8 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
 
         if use_wandb:
             _log = {"epoch": epoch + 1, "train_loss": train_loss, "lr": current_lr}
+            if avg_fft_loss > 0:
+                _log["fft_loss"] = avg_fft_loss
             if val_loss is not None:
                 _log["val_loss"] = val_loss
             if inline_metrics is not None:
