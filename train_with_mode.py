@@ -20,7 +20,7 @@ from utils import Trainer, create_optimizer_and_scheduler, TrainingLogger, save_
 from utils.data_utils import create_data_loaders
 
 
-def _compute_inline_metrics(model, test_loader, device, n_iterations, train_loader=None):
+def _compute_inline_metrics(model, test_loader, device, n_iterations, train_loader=None, per_window_norm=False):
     """
     Generate samples and compute discriminative / predictive / VDS / FDDS / corr
     against real test data. Called mid-training at validation checkpoints.
@@ -56,6 +56,19 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, train_load
     # eval_metrics expects (N, L, C)
     real_m = (real_np.transpose(0, 2, 1) + 1) * 0.5
     fake_m = (fake_np.transpose(0, 2, 1) + 1) * 0.5
+
+    # Per-window training: real windows span exactly [0,1]; apply same to fake for consistency.
+    if per_window_norm:
+        _N, _L, _C = fake_m.shape
+        fake_pw = np.zeros_like(fake_m)
+        for _i in range(_N):
+            _w = fake_m[_i]
+            _wmin = _w.min(axis=0)
+            _wmax = _w.max(axis=0)
+            _wrange = _wmax - _wmin
+            _wrange[_wrange == 0] = 1.0
+            fake_pw[_i] = (_w - _wmin) / _wrange
+        fake_m = fake_pw
 
     # ── Compute all metrics ─────────────────────────────────────────────────
     # disc_iterations=500 / pred_iterations=1000 are fast inline versions.
@@ -96,6 +109,15 @@ def _compute_inline_metrics(model, test_loader, device, n_iterations, train_load
                 sampler_type="ddim", num_steps=50, eta=0.0,
             ).cpu().numpy()
         all_fake_m = (all_fake_np.transpose(0, 2, 1) + 1) * 0.5
+        if per_window_norm:
+            _cfN, _cfL, _cfC = all_fake_m.shape
+            _cf_pw = np.zeros_like(all_fake_m)
+            for _ci in range(_cfN):
+                _cw = all_fake_m[_ci]
+                _cwmin = _cw.min(axis=0); _cwmax = _cw.max(axis=0)
+                _cwr = _cwmax - _cwmin; _cwr[_cwr == 0] = 1.0
+                _cf_pw[_ci] = (_cw - _cwmin) / _cwr
+            all_fake_m = _cf_pw
 
         context_fid = Context_FID(all_real_m, all_fake_m, device=_ts2vec_device)
         print(f"   Context-FID: {context_fid:.4f}  (N={all_real_np.shape[0]})")
@@ -135,7 +157,7 @@ def get_data_loaders(config):
     return train_loader, test_loader, dataset
 
 
-def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, num_heads: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None, finish_wandb: bool = True):
+def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embedding: str = "delay", num_epochs: int = None, batch_size: int = None, noise_schedule: str = None, checkpoint_dir: str = None, normalization: str = None, hidden_dim: int = None, num_layers: int = None, num_heads: int = None, seed: int = 42, pos_enc: str = None, lr: float = None, num_workers: int = None, use_wandb: bool = False, wandb_project: str = "diffusion-timeseries", wandb_run_name: str = None, wandb_group: str = None, eval_metrics: bool = False, eval_metrics_every: int = 100, n_metric_iterations: int = 3, img_pred_objective: str = None, img_loss_type: str = None, fft_weight: float = None, trend_weight: float = None, season_weight: float = None, finish_wandb: bool = True, per_window_norm: bool = None):
     """
     Train the diffusion model in specified mode.
 
@@ -188,6 +210,8 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
         config.model.learnable_pos_enc = (pos_enc == "learnable")
     if num_workers is not None:
         config.data.num_workers = num_workers
+    if per_window_norm is not None:
+        config.data.per_window_norm = per_window_norm
     # Image-mode specific overrides (no-ops for raw mode)
     if img_pred_objective is not None and hasattr(config.model, 'pred_objective'):
         config.model.pred_objective = img_pred_objective
@@ -327,6 +351,7 @@ def train(mode: str = "raw", device: str = "cpu", resume_from: str = None, embed
                 model, test_loader, device,
                 n_iterations=n_metric_iterations,
                 train_loader=train_loader,
+                per_window_norm=config.data.per_window_norm,
             )
             if inline_metrics is not None:
                 print(

@@ -201,3 +201,73 @@ def plot_statistics_comparison(
 
 
 from typing import Tuple
+
+
+def plot_marginal_densities(
+    real_data,
+    fake_data,
+    feature_names=None,
+    save_path=None,
+):
+    """
+    Per-feature KDE probability density overlay: real (blue) vs generated (orange).
+    Matches the WaveletDiff paper evaluation visualisation style.
+
+    Args:
+        real_data:     (N, C, L) channels-first array
+        fake_data:     (N, C, L) channels-first array
+        feature_names: list of strings (default: Open/High/Low/Close/Adj_Close/Volume)
+        save_path:     file path to save the figure
+
+    Returns:
+        matplotlib Figure
+    """
+    from scipy.stats import gaussian_kde
+
+    real_np = np.asarray(real_data)
+    fake_np = np.asarray(fake_data)
+    C = real_np.shape[1]
+
+    if feature_names is None:
+        feature_names = ["Open", "High", "Low", "Close", "Adj_Close", "Volume"][:C]
+
+    fig, axes = plt.subplots(1, C, figsize=(4 * C, 4))
+    if C == 1:
+        axes = [axes]
+
+    for i, (ax, name) in enumerate(zip(axes, feature_names)):
+        r = real_np[:, i, :].flatten()
+        f = fake_np[:, i, :].flatten()
+
+        lo = min(r.min(), f.min())
+        hi = max(r.max(), f.max())
+        xs = np.linspace(lo, hi, 300)
+
+        try:
+            kde_r = gaussian_kde(r)
+            kde_f = gaussian_kde(f)
+        except Exception:
+            ax.set_title(f"{name} (KDE failed)", fontsize=10)
+            continue
+
+        ax.plot(xs, kde_r(xs), color="steelblue",  lw=2, label="Real")
+        ax.plot(xs, kde_f(xs), color="darkorange", lw=2, label="Generated")
+        ax.fill_between(xs, kde_r(xs), alpha=0.15, color="steelblue")
+        ax.fill_between(xs, kde_f(xs), alpha=0.15, color="darkorange")
+
+        ax.set_title(name, fontsize=11, fontweight="bold")
+        ax.set_xlabel("Value", fontsize=9)
+        ax.set_ylabel("Density", fontsize=9)
+        ax.grid(True, alpha=0.3)
+        if i == 0:
+            ax.legend(fontsize=9)
+
+    plt.suptitle("Marginal Probability Densities — Real vs Generated", fontsize=13)
+    plt.tight_layout()
+
+    if save_path is not None:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"   Density plot saved: {save_path}")
+
+    return fig

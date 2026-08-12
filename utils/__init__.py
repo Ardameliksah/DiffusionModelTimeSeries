@@ -26,7 +26,7 @@ def set_seed(seed, cudnn_deterministic=False):
 
 from .training import Trainer, create_optimizer_and_scheduler, TrainingLogger, save_checkpoint, load_checkpoint
 from .sampling import DDPMSampler, DDIMSampler, sample_batch, create_sampler
-from .visualization import plot_time_series, plot_real_vs_generated, compute_statistics, plot_statistics_comparison
+from .visualization import plot_time_series, plot_real_vs_generated, compute_statistics, plot_statistics_comparison, plot_marginal_densities
 from .image_transforms import TsImgEmbedder, DelayEmbedder, PatchEmbedder, STFTEmbedder, MRTIEmbedder
 from . import persistence
 
@@ -44,6 +44,7 @@ __all__ = [
     "plot_real_vs_generated",
     "compute_statistics",
     "plot_statistics_comparison",
+    "plot_marginal_densities",
     "TsImgEmbedder",
     "DelayEmbedder",
     "PatchEmbedder",

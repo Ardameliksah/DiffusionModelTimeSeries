@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import Config, ImageVersionConfig
 from models import create_model
-from utils import compute_statistics, plot_real_vs_generated, set_seed
+from utils import compute_statistics, plot_real_vs_generated, plot_marginal_densities, set_seed
 
 
 def evaluate(
@@ -95,6 +95,7 @@ def evaluate(
     wandb_project: str = "diffusion-timeseries",
     wandb_run_name: str = None,
     wandb_group: str = None,
+    per_window_norm: bool = None,
 ):
     """
     Evaluate model in specified mode.
@@ -126,6 +127,8 @@ def evaluate(
         config.model.num_layers = num_layers
     if pos_enc is not None:
         config.model.learnable_pos_enc = (pos_enc == "learnable")
+    if per_window_norm is not None:
+        config.data.per_window_norm = per_window_norm
 
     if output_dir is None:
         output_dir = config.sampling.output_dir
@@ -232,6 +235,25 @@ def evaluate(
     real_for_metrics = (real_for_metrics + 1) * 0.5
     fake_for_metrics = (fake_for_metrics + 1) * 0.5
 
+    # When training used per-window normalization, real windows always span exactly [0,1]
+    # per feature by construction (min=0, max=1 forced). Fake windows only approximately
+    # span [0,1] (neural net output, not formula-enforced). Apply the same per-window
+    # constraint to fake data so both are in the same evaluation space.
+    if config.data.per_window_norm:
+        _N, _L, _C = fake_for_metrics.shape
+        fake_pw = np.zeros_like(fake_for_metrics)
+        for _i in range(_N):
+            _w = fake_for_metrics[_i]
+            _wmin = _w.min(axis=0)
+            _wmax = _w.max(axis=0)
+            _wrange = _wmax - _wmin
+            _wrange[_wrange == 0] = 1.0
+            fake_pw[_i] = (_w - _wmin) / _wrange
+        fake_for_metrics = fake_pw
+        print("   [NOTE] Per-window normalization applied to fake data for evaluation consistency.")
+        print("         Scores measure relative within-window temporal dynamics.")
+        print("         NOT directly comparable to global-norm baselines (Diffusion-TS, TimeGAN).")
+
     # Compute statistics
     print("\n5. Computing statistics...")
     real_stats = compute_statistics(real_data_batch)
@@ -263,6 +285,18 @@ def evaluate(
         save_path=str(save_path)
     )
     
+    # Marginal probability density plots (WaveletDiff-style)
+    import matplotlib.pyplot as plt
+    density_path = Path(output_dir) / f"densities_{mode}.png"
+    density_fig = plot_marginal_densities(
+        all_real_np, all_fake_np,
+        save_path=str(density_path),
+    )
+    if use_wandb:
+        import wandb
+        wandb.log({"density_plot": wandb.Image(str(density_path))})
+    plt.close(density_fig)
+
     # Save samples
     sample_save_path = Path(output_dir) / f"samples_{mode}_mode.npy"
     np.save(sample_save_path, samples_np)
