@@ -29,17 +29,23 @@ class _TensorDataset(Dataset):
 
 
 def create_data_loaders(
-    csv_path: str,
-    batch_size: int,
-    window_length: int,
-    neg_one_to_one: bool,
+    csv_path: str = None,
+    batch_size: int = 64,
+    window_length: int = 32,
+    neg_one_to_one: bool = True,
     train_ratio: float = 0.8,
     num_workers: int = 0,
     per_window: bool = False,
     pin_memory: bool = False,
+    raw=None,
+    windows=None,
 ):
     """
     Build train + test DataLoaders and return them together with the dataset.
+
+    Data source (checked in order): `windows` (N, L, F) -> `raw` (T, F) -> `csv_path`.
+    This keeps the loader dataset-agnostic; DecompDiff.data.datasets provides the
+    raw/windows for the non-stock datasets.
 
     Returns:
         (train_loader, test_loader, dataset)
@@ -52,6 +58,8 @@ def create_data_loaders(
         window_length=window_length,
         train_ratio=train_ratio,
         per_window=per_window,
+        raw=raw,
+        windows=windows,
     )
 
     train_loader = DataLoader(

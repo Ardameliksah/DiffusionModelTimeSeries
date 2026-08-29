@@ -125,6 +125,107 @@ def discriminative_score(real_data, fake_data, iterations=2000, device='cuda', b
     return disc_score, float(acc)
 
 
+def discriminative_per_window(real_data, fake_data, iterations=2000,
+                              device='cuda', batch_size=128, seed=None):
+    """
+    Same post-hoc GRU discriminator as `discriminative_score`, but returns a
+    per-window verdict for EVERY real and fake window (not just the test split).
+
+    The discriminator is still trained only on the 80% train split (so the
+    protocol/score is unchanged); afterwards it is run over ALL windows so you
+    can inspect how each one is classified. The `split` column tells you whether
+    a window was used to train the discriminator ('train') or held out ('test');
+    treat 'test' rows as the honest ones — 'train' rows are optimistic because
+    the discriminator has already seen them.
+
+    Returns:
+        table: pandas.DataFrame (one row per window) with columns
+            kind        : 'real' | 'fake'
+            index       : row index into real_data / fake_data
+            split       : 'train' | 'test'
+            prob_real   : P(real) the discriminator assigned in [0, 1]
+            pred        : 'real' | 'fake'  (prob_real > 0.5)
+            correct     : bool, whether the guess matched the true label
+        disc_score, acc : the usual scalars computed on the test split
+    """
+    import pandas as pd
+
+    if seed is not None:
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+
+    real_data = np.asarray(real_data)
+    fake_data = np.asarray(fake_data)
+
+    no, seq_len, dim = real_data.shape
+    hidden_dim = max(int(dim / 2), 1)
+
+    # Split real and fake separately, KEEPING the shuffle indices this time.
+    def _split_idx(n, rate=0.8):
+        idx = np.random.permutation(n)
+        cut = int(n * rate)
+        return idx[:cut], idx[cut:]
+
+    train_idx_r, test_idx_r = _split_idx(len(real_data))
+    train_idx_f, test_idx_f = _split_idx(len(fake_data))
+
+    to_t = lambda a: torch.FloatTensor(a).to(device)
+    train_real_t = to_t(real_data[train_idx_r])
+    train_fake_t = to_t(fake_data[train_idx_f])
+
+    model = _Discriminator(dim, hidden_dim).to(device)
+    optimizer = optim.Adam(model.parameters())
+    criterion = nn.BCEWithLogitsLoss()
+
+    model.train()
+    for _ in range(iterations):
+        idx_r = torch.randperm(len(train_real_t))[:batch_size]
+        idx_f = torch.randperm(len(train_fake_t))[:batch_size]
+        logit_real, _ = model(train_real_t[idx_r])
+        logit_fake, _ = model(train_fake_t[idx_f])
+        loss = criterion(logit_real, torch.ones_like(logit_real)) + \
+               criterion(logit_fake, torch.zeros_like(logit_fake))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    # Predict on EVERY window (both real and fake, both splits).
+    model.eval()
+    with torch.no_grad():
+        _, prob_real = model(to_t(real_data))
+        _, prob_fake = model(to_t(fake_data))
+    prob_real = np.atleast_1d(prob_real.squeeze().cpu().numpy())
+    prob_fake = np.atleast_1d(prob_fake.squeeze().cpu().numpy())
+
+    test_set_r = set(test_idx_r.tolist())
+    test_set_f = set(test_idx_f.tolist())
+
+    rows = []
+    for i, p in enumerate(prob_real):          # true label = real (1)
+        rows.append({
+            "kind": "real", "index": i,
+            "split": "test" if i in test_set_r else "train",
+            "prob_real": float(p), "pred": "real" if p > 0.5 else "fake",
+            "correct": bool(p > 0.5),
+        })
+    for i, p in enumerate(prob_fake):          # true label = fake (0)
+        rows.append({
+            "kind": "fake", "index": i,
+            "split": "test" if i in test_set_f else "train",
+            "prob_real": float(p), "pred": "real" if p > 0.5 else "fake",
+            "correct": bool(p <= 0.5),
+        })
+    table = pd.DataFrame(rows)
+
+    # Recompute the usual scalars on the TEST split so it matches the metric.
+    tp = np.concatenate([prob_real[test_idx_r], prob_fake[test_idx_f]])
+    tl = np.concatenate([np.ones(len(test_idx_r)), np.zeros(len(test_idx_f))])
+    acc = accuracy_score(tl, tp > 0.5)
+    disc_score = float(np.abs(0.5 - acc))
+
+    return table, disc_score, float(acc)
+
+
 # ---------------------------------------------------------------------------
 # Predictive Score
 # ---------------------------------------------------------------------------
