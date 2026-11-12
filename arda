@@ -4,6 +4,8 @@
 
 
 
+
+
 -- SME MNG Rating: September / October / November 2023 test
 -- Output tables end in _SIM. Originals are only read, never modified.
 -- Keeps the original predicates and UNION ALL; no business-rule corrections.
@@ -14,10 +16,14 @@
 
 
 
+-- Parallel hints: degree 8 for regular/final, degree 16 for pre-approvals.
+-- Both pre-approval datasets use day-1 CTAS + day-by-day INSERT INTO/COMMIT.
+-- Run as an Oracle script (PL/SQL blocks end with / on its own line).
+-- Oracle may choose a different execution plan; these hints do not guarantee speed.
 -- 1. REGULAR APPLICATIONS
 
 CREATE TABLE SME_MNG_RATING_APP_INSERT_SIM AS
-        select
+        select /*+ parallel(8) */
               pr.*,
               ltl.loan_tp_code,
               lsl.loan_stat_code,
@@ -76,9 +82,10 @@ CREATE TABLE SME_MNG_RATING_APP_INSERT_SIM AS
 
 -- 2. APPROVED PRE-APPROVALS
 
+-- Initialize with September 1, 2023 (as in original daily-load design).
 CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM AS
-     with sme_pre_approved_base as(
-      select distinct a.*,case when c.proposal_no is not null then 1 else 0 end as KULLANDIRIM_FLG
+with sme_pre_approved_base as(
+      select /*+ parallel(16) */ distinct a.*,case when c.proposal_no is not null then 1 else 0 end as KULLANDIRIM_FLG
         from (select b.application_no,
                      a.karar_tarihi,
                      status,
@@ -87,7 +94,7 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM AS
                      b.application_status,
                      b.customer_no,
                      b.process_date_time
-                from (select max(decision_date) karar_tarihi,
+                from (select /*+ parallel(16) */ max(decision_date) karar_tarihi,
                              application_id
                         from ods_kblive.alu_dt_call_io_log
                        group by application_id) a
@@ -117,7 +124,7 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM AS
                   where b.application_type='05' and status in ('APPROVE')
                     and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a
                left join
-              (select distinct application_loan_header_no as proposal_no, a.data_date as kullandirim_tarihi
+              (select /*+ parallel(16) */ distinct application_loan_header_no as proposal_no, a.data_date as kullandirim_tarihi
                from edw.lim_preapproved_limit a
                left join skey.app_loan_sk b
                on a.application_loan_id = b.application_loan_id
@@ -126,7 +133,7 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM AS
               ) c
               on a.application_no=c.proposal_no
              )
-      select
+      select /*+ parallel(16) */
               pr.insert_date ,
               pr.update_date ,
               pr.insert_run_id ,
@@ -195,7 +202,7 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM AS
              EDW.PTY_CUSTOMER_TP_LKP lkp,
              sme_pre_approved_base base
        where base.application_no = pr.proposal_no
-         and TRUNC(pr.proposal_end_date) >= DATE '2023-09-01' AND TRUNC(pr.proposal_end_date) < DATE '2023-12-01'
+         and TRUNC(pr.proposal_end_date) = DATE '2023-09-01'
          and pr.party_id = hst.party_id(+)
          and trunc(pr.proposal_end_date) = hst.data_date(+)
          and lkp.CUSTOMER_TP_ID = hst.customer_type_id
@@ -203,11 +210,16 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM AS
          and lkp.CUSTOMER_TP_CODE in ('205','100')
          and pr.source_system_id = '289';
 
--- 3. REJECTED PRE-APPROVALS
-
-CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM AS
-     with sme_pre_approved_base as(
-      select distinct a.*
+-- Insert remaining calendar days through November 30, 2023.
+BEGIN
+    FOR rec IN (
+        SELECT date_value
+        FROM EDW.CMN_CALENDAR
+        WHERE date_value BETWEEN DATE '2023-09-02' AND DATE '2023-11-30'
+    ) LOOP
+        INSERT INTO SME_MNG_RATING_APP_PREAPPROVED_INSERT_SIM
+with sme_pre_approved_base as(
+      select /*+ parallel(16) */ distinct a.*,case when c.proposal_no is not null then 1 else 0 end as KULLANDIRIM_FLG
         from (select b.application_no,
                      a.karar_tarihi,
                      status,
@@ -216,7 +228,141 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM AS
                      b.application_status,
                      b.customer_no,
                      b.process_date_time
-                from (select max(decision_date) karar_tarihi,
+                from (select /*+ parallel(16) */ max(decision_date) karar_tarihi,
+                             application_id
+                        from ods_kblive.alu_dt_call_io_log
+                       group by application_id) a
+                     inner join
+                     (select a.application_no,
+                             a.application_status,
+                             b.customer_no,
+                             a.process_date_time,
+                             application_type,
+                             a.id,
+                             a.channel_code,
+                             b.id identity_id,
+                             second_evaluation_count
+                        from ods_kblive.alu_applications a,
+                             ods_kblive.alu_identities b
+                       where a.id=b.application_id and
+                             b.is_applicant='Y' ) b
+                     on a.application_id=b.id
+                     left join
+                     (select decision_date,
+                             application_id,
+                             status,
+                             decision_source
+                        from ods_kblive.alu_dt_call_io_log) x
+                     on a.karar_tarihi=x.decision_date
+                    and a.application_id=x.application_id
+                  where b.application_type='05' and status in ('APPROVE')
+                    and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a
+               left join
+              (select /*+ parallel(16) */ distinct application_loan_header_no as proposal_no, a.data_date as kullandirim_tarihi
+               from edw.lim_preapproved_limit a
+               left join skey.app_loan_sk b
+               on a.application_loan_id = b.application_loan_id
+               left join edw.lim_source_lkp d on d.limit_source_id=a.limit_source_id
+               where d.limit_source_id in ('7','11') and (a.channel_id=23 or a.channel_id=-2)
+              ) c
+              on a.application_no=c.proposal_no
+             )
+      select /*+ parallel(16) */
+              pr.insert_date ,
+              pr.update_date ,
+              pr.insert_run_id ,
+              pr.update_run_id ,
+              pr.source_system_id ,
+              pr.proposal_id ,
+              pr.proposal_no ,
+              pr.party_id ,
+              pr.customer_type_id ,
+              pr.proposal_type_id ,
+              pr.branch_code ,
+              pr.proposal_status_id ,
+              pr.proposal_start_date ,
+              pr.proposal_expiry_date ,
+              pr.proposal_end_date ,
+              pr.proposal_close_date ,
+              pr.capital_currency_code ,
+              pr.capital_amount ,
+              pr.capital_amount_tl ,
+              pr.main_shrholdr_vhcl_owner_flg ,
+              pr.main_shareholder_other_income ,
+              pr.main_shareholder_guarantor_flg ,
+              pr.main_shareholder_party_id ,
+              pr.main_shrholdr_sector_work_year ,
+              pr.main_shrholdr_cap_share_ratio ,
+              pr.main_shareholder_branch_code ,
+              pr.other_bank_total_asset_tl ,
+              pr.last_allocation_record_id ,
+              pr.real_estate_prty_tot_amt_tl ,
+              pr.user_authority_lvl ,
+              pr.automatic_flg ,
+              pr.market_value ,
+              pr.proposal_approval_office_id ,
+              pr.proposal_customer_seg_tp_id ,
+              pr.prop_lim_distribution_ratio ,
+              pr.proposal_activation_user_code ,
+              pr.proposal_activation_branch_id ,
+              pr.proposal_close_user_code ,
+              pr.proposal_preparation_date ,
+              pr.proposal_tkds_query_flg ,
+              pr.nof_individual_guarantor ,
+              pr.nof_corporate_guarantor ,
+              pr.total_nof_employee ,
+              pr.total_nof_employee_period ,
+              pr.customer_limit ,
+              pr.calculated_authority_lvl ,
+              pr.memzuc_intelligence_query_date ,
+              pr.financial_table_id ,
+              pr.primary_debtor_indv_kkb_itl_id ,
+              pr.primary_debtor_com_kkb_itl_id ,
+              pr.primary_debtor_app_mzc_itl_id ,
+              pr.prim_shrholdr_indv_kkb_itl_id ,
+              pr.prim_shrholdr_com_kkb_itl_id ,
+              pr.prim_shrholdr_app_mzc_itl_id ,
+              pr.proposal_purpose_id ,
+              pr.proposal_file_type_id ,
+              pr.channel_id ,
+             hst.customer_sbu_code as customer_sbu_code,
+             lkp.CUSTOMER_TP_CODE as customer_type_code,
+             1 as pre_approved_flg ,
+             0 as ret_flg,
+             BASE.KULLANDIRIM_FLG
+        from dm_cad.cad_proposal pr,
+             (select * from dm.cnf_customer_hst where customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+             and data_date >= '01.01.2020') hst,
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             sme_pre_approved_base base
+       where base.application_no = pr.proposal_no
+         and TRUNC(pr.proposal_end_date) = rec.date_value
+         and pr.party_id = hst.party_id(+)
+         and trunc(pr.proposal_end_date) = hst.data_date(+)
+         and lkp.CUSTOMER_TP_ID = hst.customer_type_id
+         and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+         and lkp.CUSTOMER_TP_CODE in ('205','100')
+         and pr.source_system_id = '289';
+        COMMIT;
+    END LOOP;
+END;
+/
+
+-- 3. REJECTED PRE-APPROVALS
+
+-- Initialize with September 1, 2023 (as in original daily-load design).
+CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM AS
+with sme_pre_approved_base as(
+      select /*+ parallel(16) */ distinct a.*
+        from (select b.application_no,
+                     a.karar_tarihi,
+                     status,
+                     b.identity_id,
+                     substr(TO_CHAR(a.karar_tarihi, 'YYYYMMDD'),1,6) as ay_yil,
+                     b.application_status,
+                     b.customer_no,
+                     b.process_date_time
+                from (select /*+ parallel(16) */ max(decision_date) karar_tarihi,
                              application_id
                         from ods_kblive.alu_dt_call_io_log
                        group by application_id) a
@@ -246,7 +392,7 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM AS
                   where b.application_type='05' and status in ('DECLINE')
                     and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a
              )
-      select
+      select /*+ parallel(16) */
               pr.insert_date ,
               pr.update_date ,
               pr.insert_run_id ,
@@ -314,13 +460,141 @@ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM AS
              EDW.PTY_CUSTOMER_TP_LKP lkp,
              sme_pre_approved_base base
        where base.application_no = pr.proposal_no
-         and TRUNC(pr.proposal_end_date) >= DATE '2023-09-01' AND TRUNC(pr.proposal_end_date) < DATE '2023-12-01'
+         and TRUNC(pr.proposal_end_date) = DATE '2023-09-01'
          and pr.party_id = hst.party_id(+)
          and trunc(pr.proposal_end_date) = hst.data_date(+)
          and lkp.CUSTOMER_TP_ID = hst.customer_type_id
          and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
          and lkp.CUSTOMER_TP_CODE in ('205','100')
          and pr.source_system_id = '289';
+
+-- Insert remaining calendar days through November 30, 2023.
+BEGIN
+    FOR rec IN (
+        SELECT date_value
+        FROM EDW.CMN_CALENDAR
+        WHERE date_value BETWEEN DATE '2023-09-02' AND DATE '2023-11-30'
+    ) LOOP
+        INSERT INTO SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM
+with sme_pre_approved_base as(
+      select /*+ parallel(16) */ distinct a.*
+        from (select b.application_no,
+                     a.karar_tarihi,
+                     status,
+                     b.identity_id,
+                     substr(TO_CHAR(a.karar_tarihi, 'YYYYMMDD'),1,6) as ay_yil,
+                     b.application_status,
+                     b.customer_no,
+                     b.process_date_time
+                from (select /*+ parallel(16) */ max(decision_date) karar_tarihi,
+                             application_id
+                        from ods_kblive.alu_dt_call_io_log
+                       group by application_id) a
+                     inner join
+                     (select a.application_no,
+                             a.application_status,
+                             b.customer_no,
+                             a.process_date_time,
+                             application_type,
+                             a.id,
+                             a.channel_code,
+                             b.id identity_id,
+                             second_evaluation_count
+                        from ods_kblive.alu_applications a,
+                             ods_kblive.alu_identities b
+                       where a.id=b.application_id and
+                             b.is_applicant='Y' ) b
+                     on a.application_id=b.id
+                     left join
+                     (select decision_date,
+                             application_id,
+                             status,
+                             decision_source
+                        from ods_kblive.alu_dt_call_io_log) x
+                     on a.karar_tarihi=x.decision_date
+                    and a.application_id=x.application_id
+                  where b.application_type='05' and status in ('DECLINE')
+                    and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a
+             )
+      select /*+ parallel(16) */
+              pr.insert_date ,
+              pr.update_date ,
+              pr.insert_run_id ,
+              pr.update_run_id ,
+              pr.source_system_id ,
+              pr.proposal_id ,
+              pr.proposal_no ,
+              pr.party_id ,
+              pr.customer_type_id ,
+              pr.proposal_type_id ,
+              pr.branch_code ,
+              pr.proposal_status_id ,
+              pr.proposal_start_date ,
+              pr.proposal_expiry_date ,
+              pr.proposal_end_date ,
+              pr.proposal_close_date ,
+              pr.capital_currency_code ,
+              pr.capital_amount ,
+              pr.capital_amount_tl ,
+              pr.main_shrholdr_vhcl_owner_flg ,
+              pr.main_shareholder_other_income ,
+              pr.main_shareholder_guarantor_flg ,
+              pr.main_shareholder_party_id ,
+              pr.main_shrholdr_sector_work_year ,
+              pr.main_shrholdr_cap_share_ratio ,
+              pr.main_shareholder_branch_code ,
+              pr.other_bank_total_asset_tl ,
+              pr.last_allocation_record_id ,
+              pr.real_estate_prty_tot_amt_tl ,
+              pr.user_authority_lvl ,
+              pr.automatic_flg ,
+              pr.market_value ,
+              pr.proposal_approval_office_id ,
+              pr.proposal_customer_seg_tp_id ,
+              pr.prop_lim_distribution_ratio ,
+              pr.proposal_activation_user_code ,
+              pr.proposal_activation_branch_id ,
+              pr.proposal_close_user_code ,
+              pr.proposal_preparation_date ,
+              pr.proposal_tkds_query_flg ,
+              pr.nof_individual_guarantor ,
+              pr.nof_corporate_guarantor ,
+              pr.total_nof_employee ,
+              pr.total_nof_employee_period ,
+              pr.customer_limit ,
+              pr.calculated_authority_lvl ,
+              pr.memzuc_intelligence_query_date ,
+              pr.financial_table_id ,
+              pr.primary_debtor_indv_kkb_itl_id ,
+              pr.primary_debtor_com_kkb_itl_id ,
+              pr.primary_debtor_app_mzc_itl_id ,
+              pr.prim_shrholdr_indv_kkb_itl_id ,
+              pr.prim_shrholdr_com_kkb_itl_id ,
+              pr.prim_shrholdr_app_mzc_itl_id ,
+              pr.proposal_purpose_id ,
+              pr.proposal_file_type_id ,
+              pr.channel_id ,
+             hst.customer_sbu_code as customer_sbu_code,
+             lkp.CUSTOMER_TP_CODE as customer_type_code,
+             1 as pre_approved_flg ,
+             1 as ret_flg
+        from dm_cad.cad_proposal pr,
+             (select * from dm.cnf_customer_hst where customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+             and data_date >= '01.01.2020') hst,
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             sme_pre_approved_base base
+       where base.application_no = pr.proposal_no
+         and TRUNC(pr.proposal_end_date) = rec.date_value
+         and pr.party_id = hst.party_id(+)
+         and trunc(pr.proposal_end_date) = hst.data_date(+)
+         and lkp.CUSTOMER_TP_ID = hst.customer_type_id
+         and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+         and lkp.CUSTOMER_TP_CODE in ('205','100')
+         and pr.source_system_id = '289';
+        COMMIT;
+    END LOOP;
+END;
+/
 
 -- 4. ADD NULL CODE FIELDS FOR UNION
 
@@ -343,7 +617,7 @@ ALTER TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT_SIM ADD (
 -- 5. CONSOLIDATION
 
 create TABLE SME_MNG_RATING_APP_INSERT_FNL_SIM AS
-select
+select /*+ parallel(8) */
 A.INSERT_DATE,
 A.UPDATE_DATE,
 A.PARTY_ID,
@@ -562,7 +836,7 @@ LEFT JOIN (select * from EDW.APP_PROPOSAL_POLICY_RULE where POLICY_RULE_ID=278) 
 -- 6. ORIGINAL PRE_TEKIL FILTER
 
 CREATE TABLE SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL_SIM AS
-SELECT *
+SELECT /*+ parallel(8) */ *
 FROM SME_MNG_RATING_APP_INSERT_FNL_SIM A
 WHERE 1=1
 AND GIB_INACTIVE_FLG=0
@@ -576,7 +850,8 @@ oR (PRE_APPROVED_FLG=1 AND TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') IN ('202103','202
 -- 7. DATA_DATE
 
 ALTER TABLE SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL_SIM ADD DATA_DATE DATE;
-UPDATE SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL_SIM
+ALTER SESSION ENABLE PARALLEL DML;
+UPDATE /*+ parallel(t 8) */ SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL_SIM t
 SET DATA_DATE = LAST_DAY(ADD_MONTHS(TRUNC(PROPOSAL_END_DATE), -1));
 COMMIT;
 
