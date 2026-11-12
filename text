@@ -1,0 +1,1072 @@
+#data consolidasyon
+create TABLE SME_MNG_RATING_APP_INSERT_FNL AS
+select 
+A.INSERT_DATE,
+A.UPDATE_DATE,
+A.PARTY_ID,
+A.PROPOSAL_ID,
+A.PROPOSAL_NO,
+A.CUSTOMER_SBU_CODE,
+A.CUSTOMER_TYPE_CODE,
+A.SOURCE_SYSTEM_ID,
+A.LOAN_TP_CODE,
+A.LOAN_STAT_CODE,
+A.PROPOSAL_STAT_CODE,
+A.PROPOSAL_FILE_TYPE_ID,
+A.PROPOSAL_TP_CODE,
+A.PROPOSAL_PURPOSE_CODE,
+A.PROPOSAL_PURPOSE_ID,
+A.CUSTOMER_TYPE_ID,
+A.PROPOSAL_TYPE_ID,
+A.PROPOSAL_STATUS_ID,
+A.PROPOSAL_END_DATE,
+A.PROPOSAL_START_DATE,
+A.PROPOSAL_EXPIRY_DATE,
+A.PROPOSAL_CLOSE_DATE,
+A.RET_FLG,
+A.PRE_APPROVED_FLG,
+0 AS PRE_APPROVED_USED_FLG,
+CASE WHEN POLICY_RULE_ID IS NOT NULL THEN 1 ELSE 0 END AS GIB_INACTIVE_FLG,
+A.PROPOSAL_APPROVAL_OFFICE_ID,
+A.PROPOSAL_CUSTOMER_SEG_TP_ID,
+A.PROP_LIM_DISTRIBUTION_RATIO,
+A.PROPOSAL_ACTIVATION_USER_CODE,
+A.PROPOSAL_ACTIVATION_BRANCH_ID,
+A.PROPOSAL_CLOSE_USER_CODE,
+A.PROPOSAL_PREPARATION_DATE,
+A.PROPOSAL_TKDS_QUERY_FLG,
+A.NOF_INDIVIDUAL_GUARANTOR,
+A.NOF_CORPORATE_GUARANTOR,
+A.TOTAL_NOF_EMPLOYEE,
+A.TOTAL_NOF_EMPLOYEE_PERIOD,
+A.CUSTOMER_LIMIT,
+A.CALCULATED_AUTHORITY_LVL,
+A.MEMZUC_INTELLIGENCE_QUERY_DATE,
+A.FINANCIAL_TABLE_ID,
+A.PRIMARY_DEBTOR_INDV_KKB_ITL_ID,
+A.PRIMARY_DEBTOR_COM_KKB_ITL_ID,
+A.PRIMARY_DEBTOR_APP_MZC_ITL_ID,
+A.PRIM_SHRHOLDR_INDV_KKB_ITL_ID,
+A.PRIM_SHRHOLDR_COM_KKB_ITL_ID,
+A.PRIM_SHRHOLDR_APP_MZC_ITL_ID,
+A.CHANNEL_ID,
+A.INSERT_RUN_ID,
+A.UPDATE_RUN_ID,
+A.BRANCH_CODE,
+A.CAPITAL_CURRENCY_CODE,
+A.CAPITAL_AMOUNT,
+A.CAPITAL_AMOUNT_TL,
+A.MAIN_SHRHOLDR_VHCL_OWNER_FLG,
+A.MAIN_SHAREHOLDER_OTHER_INCOME,
+A.MAIN_SHAREHOLDER_GUARANTOR_FLG,
+A.MAIN_SHAREHOLDER_PARTY_ID,
+A.MAIN_SHRHOLDR_SECTOR_WORK_YEAR,
+A.MAIN_SHRHOLDR_CAP_SHARE_RATIO,
+A.MAIN_SHAREHOLDER_BRANCH_CODE,
+A.OTHER_BANK_TOTAL_ASSET_TL,
+A.LAST_ALLOCATION_RECORD_ID,
+A.REAL_ESTATE_PRTY_TOT_AMT_TL,
+A.USER_AUTHORITY_LVL,
+A.AUTOMATIC_FLG,
+A.MARKET_VALUE
+from SME_MNG_RATING_APP_INSERT A
+LEFT JOIN (select * from EDW.APP_PROPOSAL_POLICY_RULE where POLICY_RULE_ID=278)  RL ON A.PROPOSAL_ID=RL.PROPOSAL_ID
+
+UNION ALL 
+
+select 
+B.INSERT_DATE,
+B.UPDATE_DATE,
+B.PARTY_ID,
+B.PROPOSAL_ID,
+B.PROPOSAL_NO,
+B.CUSTOMER_SBU_CODE,
+B.CUSTOMER_TYPE_CODE,
+B.SOURCE_SYSTEM_ID,
+B.LOAN_TP_CODE,
+B.LOAN_STAT_CODE,
+B.PROPOSAL_STAT_CODE,
+B.PROPOSAL_FILE_TYPE_ID,
+B.PROPOSAL_TP_CODE,
+B.PROPOSAL_PURPOSE_CODE,
+B.PROPOSAL_PURPOSE_ID,
+B.CUSTOMER_TYPE_ID,
+B.PROPOSAL_TYPE_ID,
+B.PROPOSAL_STATUS_ID,
+B.PROPOSAL_END_DATE,
+B.PROPOSAL_START_DATE,
+B.PROPOSAL_EXPIRY_DATE,
+B.PROPOSAL_CLOSE_DATE,
+B.RET_FLG,
+B.PRE_APPROVED_FLG,
+B.KULLANDIRIM_FLG AS PRE_APPROVED_USED_FLG,
+CASE WHEN POLICY_RULE_ID IS NOT NULL THEN 1 ELSE 0 END AS GIB_INACTIVE_FLG,
+B.PROPOSAL_APPROVAL_OFFICE_ID,
+B.PROPOSAL_CUSTOMER_SEG_TP_ID,
+B.PROP_LIM_DISTRIBUTION_RATIO,
+B.PROPOSAL_ACTIVATION_USER_CODE,
+B.PROPOSAL_ACTIVATION_BRANCH_ID,
+B.PROPOSAL_CLOSE_USER_CODE,
+B.PROPOSAL_PREPARATION_DATE,
+B.PROPOSAL_TKDS_QUERY_FLG,
+B.NOF_INDIVIDUAL_GUARANTOR,
+B.NOF_CORPORATE_GUARANTOR,
+B.TOTAL_NOF_EMPLOYEE,
+B.TOTAL_NOF_EMPLOYEE_PERIOD,
+B.CUSTOMER_LIMIT,
+B.CALCULATED_AUTHORITY_LVL,
+B.MEMZUC_INTELLIGENCE_QUERY_DATE,
+B.FINANCIAL_TABLE_ID,
+B.PRIMARY_DEBTOR_INDV_KKB_ITL_ID,
+B.PRIMARY_DEBTOR_COM_KKB_ITL_ID,
+B.PRIMARY_DEBTOR_APP_MZC_ITL_ID,
+B.PRIM_SHRHOLDR_INDV_KKB_ITL_ID,
+B.PRIM_SHRHOLDR_COM_KKB_ITL_ID,
+B.PRIM_SHRHOLDR_APP_MZC_ITL_ID,
+B.CHANNEL_ID,
+B.INSERT_RUN_ID,
+B.UPDATE_RUN_ID,
+B.BRANCH_CODE,
+B.CAPITAL_CURRENCY_CODE,
+B.CAPITAL_AMOUNT,
+B.CAPITAL_AMOUNT_TL,
+B.MAIN_SHRHOLDR_VHCL_OWNER_FLG,
+B.MAIN_SHAREHOLDER_OTHER_INCOME,
+B.MAIN_SHAREHOLDER_GUARANTOR_FLG,
+B.MAIN_SHAREHOLDER_PARTY_ID,
+B.MAIN_SHRHOLDR_SECTOR_WORK_YEAR,
+B.MAIN_SHRHOLDR_CAP_SHARE_RATIO,
+B.MAIN_SHAREHOLDER_BRANCH_CODE,
+B.OTHER_BANK_TOTAL_ASSET_TL,
+B.LAST_ALLOCATION_RECORD_ID,
+B.REAL_ESTATE_PRTY_TOT_AMT_TL,
+B.USER_AUTHORITY_LVL,
+B.AUTOMATIC_FLG,
+B.MARKET_VALUE
+FROM SME_MNG_RATING_APP_PREAPPROVED_INSERT B
+LEFT JOIN (select * from EDW.APP_PROPOSAL_POLICY_RULE where POLICY_RULE_ID=278)  RL ON B.PROPOSAL_ID=RL.PROPOSAL_ID
+
+
+UNION ALL
+
+select 
+C.INSERT_DATE,
+C.UPDATE_DATE,
+C.PARTY_ID,
+C.PROPOSAL_ID,
+C.PROPOSAL_NO,
+C.CUSTOMER_SBU_CODE,
+C.CUSTOMER_TYPE_CODE,
+C.SOURCE_SYSTEM_ID,
+C.LOAN_TP_CODE,
+C.LOAN_STAT_CODE,
+C.PROPOSAL_STAT_CODE,
+C.PROPOSAL_FILE_TYPE_ID,
+C.PROPOSAL_TP_CODE,
+C.PROPOSAL_PURPOSE_CODE,
+C.PROPOSAL_PURPOSE_ID,
+C.CUSTOMER_TYPE_ID,
+C.PROPOSAL_TYPE_ID,
+C.PROPOSAL_STATUS_ID,
+C.PROPOSAL_END_DATE,
+C.PROPOSAL_START_DATE,
+C.PROPOSAL_EXPIRY_DATE,
+C.PROPOSAL_CLOSE_DATE,
+C.RET_FLG,
+C.PRE_APPROVED_FLG,
+0 AS PRE_APPROVED_USED_FLG,
+CASE WHEN POLICY_RULE_ID IS NOT NULL THEN 1 ELSE 0 END AS GIB_INACTIVE_FLG,
+C.PROPOSAL_APPROVAL_OFFICE_ID,
+C.PROPOSAL_CUSTOMER_SEG_TP_ID,
+C.PROP_LIM_DISTRIBUTION_RATIO,
+C.PROPOSAL_ACTIVATION_USER_CODE,
+C.PROPOSAL_ACTIVATION_BRANCH_ID,
+C.PROPOSAL_CLOSE_USER_CODE,
+C.PROPOSAL_PREPARATION_DATE,
+C.PROPOSAL_TKDS_QUERY_FLG,
+C.NOF_INDIVIDUAL_GUARANTOR,
+C.NOF_CORPORATE_GUARANTOR,
+C.TOTAL_NOF_EMPLOYEE,
+C.TOTAL_NOF_EMPLOYEE_PERIOD,
+C.CUSTOMER_LIMIT,
+C.CALCULATED_AUTHORITY_LVL,
+C.MEMZUC_INTELLIGENCE_QUERY_DATE,
+C.FINANCIAL_TABLE_ID,
+C.PRIMARY_DEBTOR_INDV_KKB_ITL_ID,
+C.PRIMARY_DEBTOR_COM_KKB_ITL_ID,
+C.PRIMARY_DEBTOR_APP_MZC_ITL_ID,
+C.PRIM_SHRHOLDR_INDV_KKB_ITL_ID,
+C.PRIM_SHRHOLDR_COM_KKB_ITL_ID,
+C.PRIM_SHRHOLDR_APP_MZC_ITL_ID,
+C.CHANNEL_ID,
+C.INSERT_RUN_ID,
+C.UPDATE_RUN_ID,
+C.BRANCH_CODE,
+C.CAPITAL_CURRENCY_CODE,
+C.CAPITAL_AMOUNT,
+C.CAPITAL_AMOUNT_TL,
+C.MAIN_SHRHOLDR_VHCL_OWNER_FLG,
+C.MAIN_SHAREHOLDER_OTHER_INCOME,
+C.MAIN_SHAREHOLDER_GUARANTOR_FLG,
+C.MAIN_SHAREHOLDER_PARTY_ID,
+C.MAIN_SHRHOLDR_SECTOR_WORK_YEAR,
+C.MAIN_SHRHOLDR_CAP_SHARE_RATIO,
+C.MAIN_SHAREHOLDER_BRANCH_CODE,
+C.OTHER_BANK_TOTAL_ASSET_TL,
+C.LAST_ALLOCATION_RECORD_ID,
+C.REAL_ESTATE_PRTY_TOT_AMT_TL,
+C.USER_AUTHORITY_LVL,
+C.AUTOMATIC_FLG,
+C.MARKET_VALUE
+FROM SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT C
+LEFT JOIN (select * from EDW.APP_PROPOSAL_POLICY_RULE where POLICY_RULE_ID=278)  RL ON C.PROPOSAL_ID=RL.PROPOSAL_ID
+
+grant select on SME_MNG_RATING_APP_INSERT_FNL to GLOBAL_RISK_VALIDATION;
+
+SELECT count(*) FROM SME_MNG_RATING_APP_INSERT_FNL;--46487157
+SELECT count(*) FROM SME_MNG_RATING_APP_INSERT;--7326232
+SELECT count(*) FROM SME_MNG_RATING_APP_PREAPPROVED_INSERT;--12813266
+SELECT count(*) FROM SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT;--26347659
+
+/*select * from all_tab_columns
+where table_name in ('SME_MNG_RATING_APP_INSERT','SME_MNG_RATING_APP_PREAPPROVED_INSERT','SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT')*/
+
+
+CREATE TABLE SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL AS
+SELECT *
+FROM SME_MNG_RATING_APP_INSERT_FNL A
+WHERE 1=1
+AND GIB_INACTIVE_FLG=0 /*GIB'DE FAAL OLMAYANLAR ELENMİŞTİR*/
+/*ÖN ONAYLI BAŞVURULARIN ÇEYREKLİK BAZDA TEKİLLEŞTİRİLMİŞTİR*/
+AND PRE_APPROVED_FLG=0 
+oR (PRE_APPROVED_FLG=1 AND TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') IN ('202103','202105','202109','202112', /*202106'da az sayıda sorgu yapıldığı için 202105 kullanılmıştır*/
+                                                                   '202203','202206','202209','202212',
+                                                                   '202303','202306','202309','202312',
+                                                                   '202403','202406','202408','202412'))/*202409'da az sayıda sorgu yapıldığı için 202408 kullanılmıştır*/
+;
+grant select on SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL to GLOBAL_RISK_VALIDATION;
+
+
+/*17.04.2025 Tarihinde data_date alani eklendi*/
+alter table SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL 
+ADD DATA_DATE DATE;
+
+UPDATE SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL
+SET DATA_DATE = last_day(add_months(trunc(proposal_end_date),-1))
+;
+commit;
+SELECT DISTINCT DATA_DATE FROM SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL
+
+/*20.07.2025 Tarihinde kontroller sirasinda fark edilen durum sonucunda tablosu yenide calistirildi.
+•	where POLICY_RULE_ID=278 sarti verildiginde sadece source_system_id=289 yani isletme teklifleri icin d029 kuralinı aramis oluyoruz
+yani mevcut kodla sadece isletme tekliflerinde GIB_INACTIVE_FLG alanini olusturabilmisiz
+kodu where POLICY_RULE_ID IN (278,129) seklinde güncelleyerek smile+ teklifleri icinde isaretlemeyi yapmaliyiz 
+182 yani eski sistemden gelen zaten hic teklifimiz yok onun icin kosula baska bir eklemeye yapmaya gerek yok
+•	Ek olarak mevcutta işaretleme yapabildiğimiz işletme tekliflerini de eleyememisiz çünkü GIB_INACTIVE_FLG=0 and PRE_APPROVED_FLG=0 dedigimizde bu iki koşul calisir okey ama 
+Or ile kontrol ettiğimiz kitlede GIB_INACTIVE_FLG=0 filtresi calismaz. 
+AND GIB_INACTIVE_FLG=0 
+AND PRE_APPROVED_FLG=0 
+oR (PRE_APPROVED_FLG=1 AND TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') IN ('202103','202105','202109','202112', 
+                                                                   '202203','202206','202209','202212',
+                                                                   '202303','202306','202309','202312',
+                                                                   '202403','202406','202408','202412')) */
+
+
+
+SELECT  GIB_INACTIVE_FLG,PRE_APPROVED_FLG,COUNT(*) 
+FROM  SME_MNG_RATING_APP_INSERT_FNL_PRE_TEKIL
+GROUP BY GIB_INACTIVE_FLG,PRE_APPROVED_FLG
+--GIB_INACTIVE_FLG	PRE_APPROVED_FLG	COUNT(*)
+--	0	        0	                6754352
+--	1	        1	                963186
+--	0	        1	               12953812
+
+
+#insert application
+
+CREATE TABLE SME_MNG_RATING_APP_INSERT AS
+        select /*+ parallel(8) */
+              pr.*,
+              ltl.loan_tp_code, --application_type
+              lsl.loan_stat_code, --application_status
+              ptl.proposal_tp_code, --type
+              ppl.proposal_purpose_code, --purpose
+              psl.proposal_stat_code, --status
+              hst.customer_sbu_code as customer_sbu_code,
+              LKP.CUSTOMER_TP_CODE as customer_type_code,
+              0 as pre_approved_flg,
+             CASE WHEN lsl.loan_stat_code = 'R' THEN 1
+                  WHEN psl.proposal_stat_code in ('REJ','RE') THEN 1 ELSE 0 END AS RET_FLG -- RET KITLE EKLENMISTIR
+        from dm_cad.cad_proposal pr, 
+             dm.cnf_customer_hst hst,
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             edw.app_loan_tp_lkp ltl, 
+             edw.app_loan_stat_lkp lsl, 
+             edw.app_proposal_tp_lkp ptl, 
+             edw.app_proposal_purpose_lkp ppl, 
+             edw.app_proposal_stat_lkp psl, 
+             edw.app_proposal_file_tp_lkp pft  
+       where trunc(pr.proposal_end_date)=TO_DATE('01.12.2024','DD.MM.YYYY')
+         and pr.party_id = hst.party_id(+)
+         and trunc(pr.proposal_end_date) = hst.data_date 
+         and hst.customer_type_id = lkp.CUSTOMER_TP_ID
+         and (
+             (hst.customer_sbu_code in ('310', '420', '421', '411', '440', '423', '431', '422', '442') 
+/*SBU kodlarinin aciklamalari sirasiyla asagida verilmistir
+YÜKSEK VARLIKLI BİREYSEL,KOBİ BANKACILIĞI,PERAKENDE - İŞLETME BANKACILIĞI,İŞLETME BANKACILIĞI,İŞLETME BANKACILIĞI,OBİ BANKACILIĞI,
+PLATINUM İŞLETME BANKACILIĞI,TARIM - KOBİ/OBİ,TARIM - İŞLETME*/
+             and LKP.CUSTOMER_TP_CODE in ('200','205','210','230','245','610','661','620','650') )
+/*Müsteri tiplerinin aciklamalari sirasiyla asagida verilmistir
+ADİ ORTAKLIKLAR,GERCEK KISILERIN TIC. ISLETMESI,HER CESIT ORTAKLIKLAR,KOOPERATİFLER,VAKIF,DER.SEND.KURDUĞU TİC.İŞL.,VAKIF,DERNEK,BİRLİK,SENDİKALAR
+YURT DIŞINDA YERLEŞİK TÜZEL KİŞİLER,APARTMAN YÖNETİCİLİKLERİ,NOTERLİKLER*/
+             
+             OR
+             ( hst.customer_sbu_code in ('430') and LKP.CUSTOMER_TP_CODE in ('205'))
+/* SBU kodu BLUE CLASS olup müsteri tipi GERCEK KISILERIN TIC. ISLETMESI*/
+              
+             OR 
+            ( hst.customer_sbu_code in ('440') and LKP.CUSTOMER_TP_CODE in ('100'))
+/* SBU kodu İŞLETME BANKACILIĞI olup müsteri tipi GERCEK KISILER
+Bireysel alligment projesi kapsamında ticari akıslardan gecerek yanıt dönülecek müsteriler*/
+             )
+        and pr.source_system_id = ltl.source_system_id(+)
+        and pr.proposal_type_id = ltl.loan_tp_id(+)
+        and pr.proposal_status_id = lsl.loan_stat_id(+)
+        and pr.source_system_id = ptl.source_system_id(+)
+        and pr.proposal_type_id = ptl.proposal_tp_id(+) 
+        and pr.source_system_id = ppl.source_system_id(+)
+        and pr.proposal_purpose_id = ppl.proposal_purpose_id(+)
+        and pr.source_system_id = psl.source_system_id(+)
+        and pr.proposal_status_id = psl.proposal_stat_id(+)
+        and pr.source_system_id = pft.source_system_id(+)
+        and pr.proposal_file_type_id = pft.proposal_file_tp_id(+)
+        and (
+            (pr.source_system_id = '289' and ltl.loan_tp_code in ('01','02','06') and lsl.loan_stat_code in ('A','R','CA'))
+        /*"Mikro Tahsis (Yeni)" sistemindeki "Yeni Limit Basvuru","Bireysel Basvuru" ve "CR Vade Yenileme" basvurlarında;
+         basvuru statüsü "Başvuru onaylandı","Başvuru red edildi" ve "Basvuru Şartlı Onaylandı" olanlanlar secilmektedir
+        loan_tp_code 02 olanlar bireysel limitten basvuruya gelenler*/  
+        /* SME rating modelinde loan_tp_code=2 ve loan_stat_code ('R','CA') alinmadi*/
+            or 
+            (
+            (pr.source_system_id = '181' and psl.proposal_stat_code in ('APP','CAP','REJ') and pft.proposal_file_tp_code in ('S','M')
+       /* Smile+ sistemindeki Basvuru statüsü "Onaylandı", "Şartlı" "Onaylandı", "Reddedildi" olan "Solo" ve "Member" dosya tipindeki basvurular secilmektedir.*/
+             and ((ptl.proposal_tp_code = '1' and ppl.proposal_purpose_code = '95')
+       /* Teklif tipi "Kapsamlı" olup teklif amacı "Kapsamlı" teklif olanlar*/
+              or (ptl.proposal_tp_code = '89' and ppl.proposal_purpose_code in ('16','55','96','53')))
+       /* Teklif tipi STANDART olup teklif amaci "Karma","Dış Kaynak","CR Vade Uzatım","Otomatik Rating ve CR" olanlar */    
+       /* SME Rating modelinde proposal_stat_code 'REJ' ve    proposal_purpose_code 53 alinmadi*/
+            )
+            )
+            or (pr.source_system_id = '182' and psl.proposal_stat_code in ('ON','RE') and ptl.proposal_tp_code = 'Y')
+       /* SMILE sistemindeki teklif statüsü "Onaylandı","Ret Edildi" olan  "Yeni Teklif" tipindeki basvurular 
+          IRB modelde CR Vade Uzatım tekliflerini de almak istersek SME Rating modelinde ods_wflive.t_cup_proposal(max tarih 24.01.2019) tablosu
+          kullanılarak olusturulan sorgu kullanilmalidir.
+          Managerial model icin olusturmamiza gerek yok cunkü bu eski sistemden de basvuru alacak kadar eskiye gitmeyecegiz.
+       */
+       
+        )
+;
+SELECT COUNT(*) FROM SME_MNG_RATING_APP_INSERT;
+--2,702
+begin 
+for rec in (select date_value from EDW.CMN_CALENDAR
+             where date_value between TO_DATE('02.12.2024','DD.MM.YYYY') and TO_DATE('31.12.2024','DD.MM.YYYY')) loop       
+
+        INSERT INTO SME_MNG_RATING_APP_INSERT
+        select /*+ parallel(8) */
+              pr.*,
+              ltl.loan_tp_code, --application_type
+              lsl.loan_stat_code, --application_status
+              ptl.proposal_tp_code, --type
+              ppl.proposal_purpose_code, --purpose
+              psl.proposal_stat_code, --status
+              hst.customer_sbu_code as customer_sbu_code,
+              LKP.CUSTOMER_TP_CODE as customer_type_code,
+              0 as pre_approved_flg,
+             CASE WHEN lsl.loan_stat_code = 'R' THEN 1
+                  WHEN psl.proposal_stat_code in ('REJ','RE') THEN 1 ELSE 0 END AS RET_FLG -- RET KITLE EKLENMISTIR
+        from dm_cad.cad_proposal pr, --Ticari-Kurumsal, Sme ve Mikro kredi teklif bilgilerinin tutulduğu tablodur.  
+             dm.cnf_customer_hst hst,/*Müsteri bilgilerinin denormalize olarak tutulduğu tablodur. Elde edilmek istenen bilgiler icin birden fazla tabloya join kurulması gerek kalmadan veri tekrar edilerek saklanan tablo yapısı*/
+             EDW.PTY_CUSTOMER_TP_LKP lkp,/*Müsteri tiplerinin aciklamalarının tutulduğu lookup tablodur.*/
+             edw.app_loan_tp_lkp ltl, /*Basvuru tipinin aciklamalarının tutulduğu lookup tablodur.*/
+             edw.app_loan_stat_lkp lsl, /*Basvuru statüsünün tanımlarının tutulduğu tablodur.*/
+             edw.app_proposal_tp_lkp ptl, /*Teklif türlerini tutan tablodur.*/
+             edw.app_proposal_purpose_lkp ppl, /*Teklif amac/tiplerini tutan tablodur.*/
+             edw.app_proposal_stat_lkp psl, /*Teklif statülerini tutan lookup tablosudur.*/
+             edw.app_proposal_file_tp_lkp pft  
+       where trunc(pr.proposal_end_date)=rec.date_value
+         and pr.party_id = hst.party_id(+)
+         and trunc(pr.proposal_end_date) = hst.data_date 
+         and hst.customer_type_id = lkp.CUSTOMER_TP_ID
+         and (
+             (hst.customer_sbu_code in ('310', '420', '421', '411', '440', '423', '431', '422', '442') 
+/*SBU kodlarinin aciklamalari sirasiyla asagida verilmistir
+YÜKSEK VARLIKLI BİREYSEL,KOBİ BANKACILIĞI,PERAKENDE - İŞLETME BANKACILIĞI,İŞLETME BANKACILIĞI,İŞLETME BANKACILIĞI,OBİ BANKACILIĞI,
+PLATINUM İŞLETME BANKACILIĞI,TARIM - KOBİ/OBİ,TARIM - İŞLETME*/
+             and LKP.CUSTOMER_TP_CODE in ('200','205','210','230','245','610','661','620','650') )
+/*Müsteri tiplerinin aciklamalari sirasiyla asagida verilmistir
+ADİ ORTAKLIKLAR,GERCEK KISILERIN TIC. ISLETMESI,HER CESIT ORTAKLIKLAR,KOOPERATİFLER,VAKIF,DER.SEND.KURDUĞU TİC.İŞL.,VAKIF,DERNEK,BİRLİK,SENDİKALAR
+YURT DIŞINDA YERLEŞİK TÜZEL KİŞİLER,APARTMAN YÖNETİCİLİKLERİ,NOTERLİKLER*/
+             
+             OR
+             ( hst.customer_sbu_code in ('430') and LKP.CUSTOMER_TP_CODE in ('205'))
+/* SBU kodu BLUE CLASS olup müsteri tipi GERCEK KISILERIN TIC. ISLETMESI*/
+              
+             OR 
+            ( hst.customer_sbu_code in ('440') and LKP.CUSTOMER_TP_CODE in ('100'))
+/* SBU kodu İŞLETME BANKACILIĞI olup müsteri tipi GERCEK KISILER
+Bireysel alligment projesi kapsamında ticari akıslardan gecerek yanıt dönülecek müsteriler*/
+             )
+        and pr.source_system_id = ltl.source_system_id(+)
+        and pr.proposal_type_id = ltl.loan_tp_id(+)
+        and pr.proposal_status_id = lsl.loan_stat_id(+)
+        and pr.source_system_id = ptl.source_system_id(+)
+        and pr.proposal_type_id = ptl.proposal_tp_id(+) 
+        and pr.source_system_id = ppl.source_system_id(+)
+        and pr.proposal_purpose_id = ppl.proposal_purpose_id(+)
+        and pr.source_system_id = psl.source_system_id(+)
+        and pr.proposal_status_id = psl.proposal_stat_id(+)
+        and pr.source_system_id = pft.source_system_id(+)
+        and pr.proposal_file_type_id = pft.proposal_file_tp_id(+)
+        and (
+            (pr.source_system_id = '289' and ltl.loan_tp_code in ('01','02','06') and lsl.loan_stat_code in ('A','R','CA'))
+        /*"Mikro Tahsis (Yeni)" sistemindeki "Yeni Limit Basvuru","Bireysel Basvuru" ve "CR Vade Yenileme" basvurlarında;
+         basvuru statüsü "Başvuru onaylandı","Başvuru red edildi" ve "Basvuru Şartlı Onaylandı" olanlanlar secilmektedir
+        loan_tp_code 02 olanlar bireysel limitten basvuruya gelenler*/  
+        /* SME rating modelinde loan_tp_code=5 ve loan_stat_code ('R','CA') alinmadi*/
+            or 
+            (
+            (pr.source_system_id = '181' and psl.proposal_stat_code in ('APP','CAP','REJ') and pft.proposal_file_tp_code in ('S','M')
+       /* Smile+ sistemindeki Basvuru statüsü "Onaylandı", "Şartlı" "Onaylandı", "Reddedildi" olan "Solo" ve "Member" dosya tipindeki basvurular secilmektedir.*/
+             and ((ptl.proposal_tp_code = '1' and ppl.proposal_purpose_code = '95')
+       /* Teklif tipi "Limit İptali Teklifi" olup teklif amacı "Kapsamlı" teklif olanlar*/
+              or (ptl.proposal_tp_code = '89' and ppl.proposal_purpose_code in ('16','55','96','53')))
+       /* Teklif tipi STANDART olup teklif amaci "Karma","Dış Kaynak","CR Vade Uzatım","Otomatik Rating ve CR" olanlar */    
+       /* SME Rating modelinde proposal_stat_code 'REJ' ve    proposal_purpose_code 53 alinmadi*/
+            )
+            )
+            or (pr.source_system_id = '182' and psl.proposal_stat_code in ('ON','RE') and ptl.proposal_tp_code = 'Y')
+       /* SMILE sistemindeki teklif statüsü "Onaylandı","Ret Edildi" olan  "Yeni Teklif" tipindeki basvurular 
+          IRB modelde CR Vade Uzatım tekliflerini de almak istersek SME Rating modelinde ods_wflive.t_cup_proposal(max tarih 24.01.2019) tablosu
+          kullanılarak olusturulan sorgu kullanilmalidir.
+          Managerial model icin olusturmamiza gerek yok cunkü bu eski sistemden de basvuru alacak kadar eskiye gitmeyecegiz.
+       */
+       
+        )
+;
+commit;
+end loop;
+end;
+
+--SELECT * FROM DM.CNF_SBU
+--SELECT * FROM EDW.PTY_CUSTOMER_TP_LKP
+
+--en güncelden geriye giderek 202412
+--2-3 senelik olabilir
+--2023,2022,2021
+--90-180 değişim kararının tarihini yazalım 2020mart-2021kasım
+
+#insert önonay application
+
+ CREATE TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT AS
+     with sme_pre_approved_base as(
+      select distinct a.*,case when c.proposal_no is not null then 1 else 0 end as KULLANDIRIM_FLG
+        from (select b.application_no,
+                     a.karar_tarihi,
+                     status,
+                     b.identity_id,
+                     --substr(a.karar_tarihi,7,4)||substr(a.karar_tarihi,4,2) ay_yil,
+                     substr(TO_CHAR(a.karar_tarihi, 'YYYYMMDD'),1,6) as ay_yil,
+                     b.application_status,
+                     b.customer_no,
+                     b.process_date_time
+                from (select max(decision_date) karar_tarihi,
+                             application_id
+                        from ods_kblive.alu_dt_call_io_log
+                       group by application_id) a
+                     inner join 
+                     (select a.application_no,
+                             a.application_status,
+                             b.customer_no,
+                             a.process_date_time,
+                             application_type,
+                             a.id,
+                             a.channel_code,
+                             b.id identity_id,
+                             second_evaluation_count
+                        from ods_kblive.alu_applications a,
+                             ods_kblive.alu_identities b 
+                       where a.id=b.application_id and
+                             b.is_applicant='Y' ) b
+                     on a.application_id=b.id
+                     left join 
+                     (select decision_date,
+                             application_id,
+                             status, 
+                             decision_source
+                        from ods_kblive.alu_dt_call_io_log) x
+                     on a.karar_tarihi=x.decision_date 
+                    and a.application_id=x.application_id
+                  where b.application_type='05' and status in ('APPROVE')
+                    and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a  
+               left join
+              (select distinct application_loan_header_no as proposal_no, a.data_date as kullandirim_tarihi
+               from edw.lim_preapproved_limit a
+               left join skey.app_loan_sk b
+               on a.application_loan_id = b.application_loan_id
+               left join edw.lim_source_lkp d on d.limit_source_id=a.limit_source_id
+               where d.limit_source_id in ('7','11') and (a.channel_id=23 or a.channel_id=-2)
+              ) c
+              on a.application_no=c.proposal_no /*İRB İCİN KULLANDIRIM FLAG YETERLİ DEGİL RATİNG SME_APPLICATIONS TABLOSUNDAN BAKALIM*/
+              
+             
+             )
+      select /*+ parallel(16) */
+              pr.insert_date ,
+              pr.update_date ,
+              pr.insert_run_id ,
+              pr.update_run_id ,
+              pr.source_system_id ,
+              pr.proposal_id ,
+              pr.proposal_no ,
+              pr.party_id ,
+              pr.customer_type_id ,
+              pr.proposal_type_id ,
+              pr.branch_code ,
+              pr.proposal_status_id ,
+              pr.proposal_start_date ,
+              pr.proposal_expiry_date ,
+              pr.proposal_end_date ,
+              pr.proposal_close_date ,
+              pr.capital_currency_code ,
+              pr.capital_amount ,
+              pr.capital_amount_tl ,
+              pr.main_shrholdr_vhcl_owner_flg ,
+              pr.main_shareholder_other_income ,
+              pr.main_shareholder_guarantor_flg ,
+              pr.main_shareholder_party_id ,
+              pr.main_shrholdr_sector_work_year ,
+              pr.main_shrholdr_cap_share_ratio ,
+              pr.main_shareholder_branch_code ,
+              pr.other_bank_total_asset_tl ,
+              pr.last_allocation_record_id ,
+              pr.real_estate_prty_tot_amt_tl ,
+              pr.user_authority_lvl ,
+              pr.automatic_flg ,
+              pr.market_value ,
+              pr.proposal_approval_office_id ,
+              pr.proposal_customer_seg_tp_id ,
+              pr.prop_lim_distribution_ratio ,
+              pr.proposal_activation_user_code ,
+              pr.proposal_activation_branch_id ,
+              pr.proposal_close_user_code ,
+              pr.proposal_preparation_date ,
+              pr.proposal_tkds_query_flg ,
+              pr.nof_individual_guarantor ,
+              pr.nof_corporate_guarantor ,
+              pr.total_nof_employee ,
+              pr.total_nof_employee_period ,
+              pr.customer_limit ,
+              pr.calculated_authority_lvl ,
+              pr.memzuc_intelligence_query_date ,
+              pr.financial_table_id ,
+              pr.primary_debtor_indv_kkb_itl_id ,
+              pr.primary_debtor_com_kkb_itl_id ,
+              pr.primary_debtor_app_mzc_itl_id ,
+              pr.prim_shrholdr_indv_kkb_itl_id ,
+              pr.prim_shrholdr_com_kkb_itl_id ,
+              pr.prim_shrholdr_app_mzc_itl_id ,
+              pr.proposal_purpose_id ,
+              pr.proposal_file_type_id ,
+              pr.channel_id ,
+             --null as loan_tp_code, --application_type
+            --null as loan_stat_code, --application_status
+             --null as proposal_tp_code, --type
+             --null as proposal_purpose_code, --purpose
+             --null as proposal_stat_code, --status
+             hst.customer_sbu_code as customer_sbu_code,
+             lkp.CUSTOMER_TP_CODE as customer_type_code,
+             1 as pre_approved_flg ,
+             0 as ret_flg,   
+             BASE.KULLANDIRIM_FLG      
+        from dm_cad.cad_proposal pr, 
+             (select * from dm.cnf_customer_hst where customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+             and data_date >= '01.01.2020') hst,
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             sme_pre_approved_base base
+       where base.application_no = pr.proposal_no
+         and trunc(pr.proposal_end_date)=TO_DATE('01.12.2024','DD.MM.YYYY') 
+         and pr.party_id = hst.party_id(+) 
+         and trunc(pr.proposal_end_date) = hst.data_date(+)
+         and lkp.CUSTOMER_TP_ID = hst.customer_type_id
+         and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+         and lkp.CUSTOMER_TP_CODE in ('205','100')
+         and pr.source_system_id = '289';
+   
+SELECT COUNT(*) FROM SME_MNG_RATING_APP_PREAPPROVED_INSERT;--574
+
+begin 
+for rec in (select date_value from EDW.CMN_CALENDAR
+             where date_value between TO_DATE('02.12.2024','DD.MM.YYYY') and TO_DATE('31.12.2024','DD.MM.YYYY')) loop  
+             
+INSERT INTO SME_MNG_RATING_APP_PREAPPROVED_INSERT
+     with sme_pre_approved_base as(
+      select distinct a.*,case when c.proposal_no is not null then 1 else 0 end as KULLANDIRIM_FLG
+        from (select b.application_no,
+                     a.karar_tarihi,
+                     status,
+                     b.identity_id,
+                     --substr(a.karar_tarihi,7,4)||substr(a.karar_tarihi,4,2) ay_yil,
+                     substr(TO_CHAR(a.karar_tarihi, 'YYYYMMDD'),1,6) as ay_yil,
+                     b.application_status,
+                     b.customer_no,
+                     b.process_date_time
+                from (select max(decision_date) karar_tarihi,
+                             application_id
+                        from ods_kblive.alu_dt_call_io_log
+                       group by application_id) a
+                     inner join 
+                     (select a.application_no,
+                             a.application_status,
+                             b.customer_no,
+                             a.process_date_time,
+                             application_type,
+                             a.id,
+                             a.channel_code,
+                             b.id identity_id,
+                             second_evaluation_count
+                        from ods_kblive.alu_applications a,
+                             ods_kblive.alu_identities b 
+                       where a.id=b.application_id and
+                             b.is_applicant='Y' ) b
+                     on a.application_id=b.id
+                     left join 
+                     (select decision_date,
+                             application_id,
+                             status, 
+                             decision_source
+                        from ods_kblive.alu_dt_call_io_log) x
+                     on a.karar_tarihi=x.decision_date 
+                    and a.application_id=x.application_id
+                  where b.application_type='05' and status in ('APPROVE')/* önonaylı basvuru olup onaylanan basvurular*/
+                    and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a  
+               left join
+              (select distinct application_loan_header_no as proposal_no, a.data_date as kullandirim_tarihi
+               from edw.lim_preapproved_limit a /*Ön onaylı limit aktarım bilgilerinin tutulduğu tablodur*/
+               left join skey.app_loan_sk b /* Kredi basvurularının kaynak anahtarı ile veri ambarında üretilen anahtar eslesmesini gösteren tablodur.*/
+               on a.application_loan_id = b.application_loan_id
+               left join edw.lim_source_lkp d on d.limit_source_id=a.limit_source_id/*Ticari tahsis sistemindeki kaynakların belirtildigi lookup tablosudur*/
+               where d.limit_source_id in ('7','11') and (a.channel_id=23 or a.channel_id=-2)--- Onaylı Limit Aktarımı ve Online Kullandırım kaynaklarindan 
+              ) c
+              on a.application_no=c.proposal_no 
+              /*IRB icin KULLANDIRIM FLAG data derinligi bu sorgu ile yeterli olmayacak. Eksik yilaylar icin SME Rating modeli SME_APPLICATIONS tablosudan cekebiliriz direkt.*/
+              
+             
+             )
+      select /*+ parallel(16) */
+              pr.insert_date ,
+              pr.update_date ,
+              pr.insert_run_id ,
+              pr.update_run_id ,
+              pr.source_system_id ,
+              pr.proposal_id ,
+              pr.proposal_no ,
+              pr.party_id ,
+              pr.customer_type_id ,
+              pr.proposal_type_id ,
+              pr.branch_code ,
+              pr.proposal_status_id ,
+              pr.proposal_start_date ,
+              pr.proposal_expiry_date ,
+              pr.proposal_end_date ,
+              pr.proposal_close_date ,
+              pr.capital_currency_code ,
+              pr.capital_amount ,
+              pr.capital_amount_tl ,
+              pr.main_shrholdr_vhcl_owner_flg ,
+              pr.main_shareholder_other_income ,
+              pr.main_shareholder_guarantor_flg ,
+              pr.main_shareholder_party_id ,
+              pr.main_shrholdr_sector_work_year ,
+              pr.main_shrholdr_cap_share_ratio ,
+              pr.main_shareholder_branch_code ,
+              pr.other_bank_total_asset_tl ,
+              pr.last_allocation_record_id ,
+              pr.real_estate_prty_tot_amt_tl ,
+              pr.user_authority_lvl ,
+              pr.automatic_flg ,
+              pr.market_value ,
+              pr.proposal_approval_office_id ,
+              pr.proposal_customer_seg_tp_id ,
+              pr.prop_lim_distribution_ratio ,
+              pr.proposal_activation_user_code ,
+              pr.proposal_activation_branch_id ,
+              pr.proposal_close_user_code ,
+              pr.proposal_preparation_date ,
+              pr.proposal_tkds_query_flg ,
+              pr.nof_individual_guarantor ,
+              pr.nof_corporate_guarantor ,
+              pr.total_nof_employee ,
+              pr.total_nof_employee_period ,
+              pr.customer_limit ,
+              pr.calculated_authority_lvl ,
+              pr.memzuc_intelligence_query_date ,
+              pr.financial_table_id ,
+              pr.primary_debtor_indv_kkb_itl_id ,
+              pr.primary_debtor_com_kkb_itl_id ,
+              pr.primary_debtor_app_mzc_itl_id ,
+              pr.prim_shrholdr_indv_kkb_itl_id ,
+              pr.prim_shrholdr_com_kkb_itl_id ,
+              pr.prim_shrholdr_app_mzc_itl_id ,
+              pr.proposal_purpose_id ,
+              pr.proposal_file_type_id ,
+              pr.channel_id ,
+             --null as loan_tp_code, --application_type
+             --null as loan_stat_code, --application_status
+             --null as proposal_tp_code, --type
+             --null as proposal_purpose_code, --purpose
+             --null as proposal_stat_code, --status
+             hst.customer_sbu_code as customer_sbu_code,
+             lkp.customer_type_code as customer_type_code,
+             1 as pre_approved_flg ,
+             0 as ret_flg,   
+             BASE.KULLANDIRIM_FLG      
+        from dm_cad.cad_proposal pr, 
+             (select * from dm.cnf_customer_hst where customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')        /* SBU kodu YÜKSEK VARLIKLI BİREYSEL,KOBİ BANKACILIĞI,İŞLETME BANKACILIĞI,İŞLETME BANKACILIĞI,OBİ BANKACILIĞI,PLATINUM İŞLETME BANKACILIĞI,TARIM - KOBİ/OBİ,TARIM - İŞLETME olan kayitlar seciliyor*/
+             and data_date >= '01.01.2020') hst,/* tablo veri derinligini kısmak icin kücültülmüstür*/
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             sme_pre_approved_base base
+       where base.application_no = pr.proposal_no
+         and trunc(pr.proposal_end_date)=rec.date_value 
+         and pr.party_id = hst.party_id(+) 
+         and trunc(pr.proposal_end_date) = hst.data_date(+)
+         and lkp.CUSTOMER_TP_ID = hst.customer_type_id
+         and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442') 
+         /* SBU kodu YÜKSEK VARLIKLI BİREYSEL,KOBİ BANKACILIĞI,İŞLETME BANKACILIĞI,İŞLETME BANKACILIĞI,OBİ BANKACILIĞI,PLATINUM İŞLETME BANKACILIĞI,TARIM - KOBİ/OBİ,TARIM - İŞLETME olan kayitlar seciliyor*/
+         and lkp.CUSTOMER_TP_CODE in ('205','100')
+         /* müsteri tipi GERCEK KISILERIN TIC. ISLETMESI,GERCEK KISILER olan kayitlar seciliyor*/
+         and pr.source_system_id = '289';/* "Mikro Tahsis (Yeni)" sistemindeki basvurulari secmek icin eklenmistir*/
+    
+        COMMIT;
+    
+    END LOOP;
+
+END;
+
+
+---Diger basvurular ile union yapilacagi icin aynı kolonlar yaratiliyor---
+ALTER TABLE SME_MNG_RATING_APP_PREAPPROVED_INSERT
+ADD(
+    loan_tp_code VARCHAR2(40) NULL,
+    loan_stat_code VARCHAR2(40) NULL,
+    proposal_tp_code VARCHAR2(40) NULL,
+    proposal_purpose_code VARCHAR2(40) NULL,
+    proposal_stat_code VARCHAR2(40) NULL);
+
+#insert application önonaylı ret
+
+ create TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT AS
+     with sme_pre_approved_base as(
+      select distinct a.*
+        from (select b.application_no,
+                     a.karar_tarihi,
+                     status,
+                     b.identity_id,
+                     --substr(a.karar_tarihi,7,4)||substr(a.karar_tarihi,4,2) ay_yil,
+                     substr(TO_CHAR(a.karar_tarihi, 'YYYYMMDD'),1,6) as ay_yil,
+                     b.application_status,
+                     b.customer_no,
+                     b.process_date_time
+                from (select max(decision_date) karar_tarihi,
+                             application_id
+                        from ods_kblive.alu_dt_call_io_log
+                       group by application_id) a
+                     inner join 
+                     (select a.application_no,
+                             a.application_status,
+                             b.customer_no,
+                             a.process_date_time,
+                             application_type,
+                             a.id,
+                             a.channel_code,
+                             b.id identity_id,
+                             second_evaluation_count
+                        from ods_kblive.alu_applications a,
+                             ods_kblive.alu_identities b 
+                       where a.id=b.application_id and
+                             b.is_applicant='Y' ) b
+                     on a.application_id=b.id
+                     left join 
+                     (select decision_date,
+                             application_id,
+                             status, 
+                             decision_source
+                        from ods_kblive.alu_dt_call_io_log) x
+                     on a.karar_tarihi=x.decision_date 
+                    and a.application_id=x.application_id
+                  where b.application_type='05' and status in ('DECLINE')
+                    and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a  
+             )
+      select /*+ parallel(16) */
+              pr.insert_date ,
+              pr.update_date ,
+              pr.insert_run_id ,
+              pr.update_run_id ,
+              pr.source_system_id ,
+              pr.proposal_id ,
+              pr.proposal_no ,
+              pr.party_id ,
+              pr.customer_type_id ,
+              pr.proposal_type_id ,
+              pr.branch_code ,
+              pr.proposal_status_id ,
+              pr.proposal_start_date ,
+              pr.proposal_expiry_date ,
+              pr.proposal_end_date ,
+              pr.proposal_close_date ,
+              pr.capital_currency_code ,
+              pr.capital_amount ,
+              pr.capital_amount_tl ,
+              pr.main_shrholdr_vhcl_owner_flg ,
+              pr.main_shareholder_other_income ,
+              pr.main_shareholder_guarantor_flg ,
+              pr.main_shareholder_party_id ,
+              pr.main_shrholdr_sector_work_year ,
+              pr.main_shrholdr_cap_share_ratio ,
+              pr.main_shareholder_branch_code ,
+              pr.other_bank_total_asset_tl ,
+              pr.last_allocation_record_id ,
+              pr.real_estate_prty_tot_amt_tl ,
+              pr.user_authority_lvl ,
+              pr.automatic_flg ,
+              pr.market_value ,
+              pr.proposal_approval_office_id ,
+              pr.proposal_customer_seg_tp_id ,
+              pr.prop_lim_distribution_ratio ,
+              pr.proposal_activation_user_code ,
+              pr.proposal_activation_branch_id ,
+              pr.proposal_close_user_code ,
+              pr.proposal_preparation_date ,
+              pr.proposal_tkds_query_flg ,
+              pr.nof_individual_guarantor ,
+              pr.nof_corporate_guarantor ,
+              pr.total_nof_employee ,
+              pr.total_nof_employee_period ,
+              pr.customer_limit ,
+              pr.calculated_authority_lvl ,
+              pr.memzuc_intelligence_query_date ,
+              pr.financial_table_id ,
+              pr.primary_debtor_indv_kkb_itl_id ,
+              pr.primary_debtor_com_kkb_itl_id ,
+              pr.primary_debtor_app_mzc_itl_id ,
+              pr.prim_shrholdr_indv_kkb_itl_id ,
+              pr.prim_shrholdr_com_kkb_itl_id ,
+              pr.prim_shrholdr_app_mzc_itl_id ,
+              pr.proposal_purpose_id ,
+              pr.proposal_file_type_id ,
+              pr.channel_id ,
+             --null as loan_tp_code, --application_type
+            --null as loan_stat_code, --application_status
+             --null as proposal_tp_code, --type
+             --null as proposal_purpose_code, --purpose
+             --null as proposal_stat_code, --status
+             hst.customer_sbu_code as customer_sbu_code,
+             lkp.CUSTOMER_TP_CODE as customer_type_code,
+             1 as pre_approved_flg ,
+             1 as ret_flg
+        from dm_cad.cad_proposal pr, 
+             (select * from dm.cnf_customer_hst where customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+             and data_date >= '01.01.2020') hst,
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             sme_pre_approved_base base
+       where base.application_no = pr.proposal_no
+         and trunc(pr.proposal_end_date)=TO_DATE('01.12.2024','DD.MM.YYYY') 
+         and pr.party_id = hst.party_id(+) 
+         and trunc(pr.proposal_end_date) = hst.data_date(+)
+         and lkp.CUSTOMER_TP_ID = hst.customer_type_id
+         and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+         and lkp.CUSTOMER_TP_CODE in ('205','100')
+         and pr.source_system_id = '289';
+   
+SELECT proposal_end_date,count(*) FROM SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT group by proposal_end_date;--99
+--17:50 kasım
+--24:33 ekim
+--17:22 eylül
+
+begin 
+for rec in (select date_value from EDW.CMN_CALENDAR
+             where date_value between TO_DATE('22.07.2021','DD.MM.YYYY') and TO_DATE('31.12.2021','DD.MM.YYYY')) loop  
+             
+INSERT INTO SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+     with sme_pre_approved_base as(
+      select distinct a.*
+        from (select b.application_no,
+                     a.karar_tarihi,
+                     status,
+                     b.identity_id,
+                     --substr(a.karar_tarihi,7,4)||substr(a.karar_tarihi,4,2) ay_yil,
+                     substr(TO_CHAR(a.karar_tarihi, 'YYYYMMDD'),1,6) as ay_yil,
+                     b.application_status,
+                     b.customer_no,
+                     b.process_date_time
+                from (select max(decision_date) karar_tarihi,
+                             application_id
+                        from ods_kblive.alu_dt_call_io_log
+                       group by application_id) a
+                     inner join 
+                     (select a.application_no,
+                             a.application_status,
+                             b.customer_no,
+                             a.process_date_time,
+                             application_type,
+                             a.id,
+                             a.channel_code,
+                             b.id identity_id,
+                             second_evaluation_count
+                        from ods_kblive.alu_applications a,
+                             ods_kblive.alu_identities b 
+                       where a.id=b.application_id and
+                             b.is_applicant='Y' ) b
+                     on a.application_id=b.id
+                     left join 
+                     (select decision_date,
+                             application_id,
+                             status, 
+                             decision_source
+                        from ods_kblive.alu_dt_call_io_log) x
+                     on a.karar_tarihi=x.decision_date 
+                    and a.application_id=x.application_id
+                  where b.application_type='05' and status in ('DECLINE')
+                    and trunc(karar_tarihi)>=to_date('01.10.2017', 'DD.MM.YYYY')) a  
+             )
+      select /*+ parallel(16) */
+              pr.insert_date ,
+              pr.update_date ,
+              pr.insert_run_id ,
+              pr.update_run_id ,
+              pr.source_system_id ,
+              pr.proposal_id ,
+              pr.proposal_no ,
+              pr.party_id ,
+              pr.customer_type_id ,
+              pr.proposal_type_id ,
+              pr.branch_code ,
+              pr.proposal_status_id ,
+              pr.proposal_start_date ,
+              pr.proposal_expiry_date ,
+              pr.proposal_end_date ,
+              pr.proposal_close_date ,
+              pr.capital_currency_code ,
+              pr.capital_amount ,
+              pr.capital_amount_tl ,
+              pr.main_shrholdr_vhcl_owner_flg ,
+              pr.main_shareholder_other_income ,
+              pr.main_shareholder_guarantor_flg ,
+              pr.main_shareholder_party_id ,
+              pr.main_shrholdr_sector_work_year ,
+              pr.main_shrholdr_cap_share_ratio ,
+              pr.main_shareholder_branch_code ,
+              pr.other_bank_total_asset_tl ,
+              pr.last_allocation_record_id ,
+              pr.real_estate_prty_tot_amt_tl ,
+              pr.user_authority_lvl ,
+              pr.automatic_flg ,
+              pr.market_value ,
+              pr.proposal_approval_office_id ,
+              pr.proposal_customer_seg_tp_id ,
+              pr.prop_lim_distribution_ratio ,
+              pr.proposal_activation_user_code ,
+              pr.proposal_activation_branch_id ,
+              pr.proposal_close_user_code ,
+              pr.proposal_preparation_date ,
+              pr.proposal_tkds_query_flg ,
+              pr.nof_individual_guarantor ,
+              pr.nof_corporate_guarantor ,
+              pr.total_nof_employee ,
+              pr.total_nof_employee_period ,
+              pr.customer_limit ,
+              pr.calculated_authority_lvl ,
+              pr.memzuc_intelligence_query_date ,
+              pr.financial_table_id ,
+              pr.primary_debtor_indv_kkb_itl_id ,
+              pr.primary_debtor_com_kkb_itl_id ,
+              pr.primary_debtor_app_mzc_itl_id ,
+              pr.prim_shrholdr_indv_kkb_itl_id ,
+              pr.prim_shrholdr_com_kkb_itl_id ,
+              pr.prim_shrholdr_app_mzc_itl_id ,
+              pr.proposal_purpose_id ,
+              pr.proposal_file_type_id ,
+              pr.channel_id ,
+             --null as loan_tp_code, --application_type
+            --null as loan_stat_code, --application_status
+             --null as proposal_tp_code, --type
+             --null as proposal_purpose_code, --purpose
+             --null as proposal_stat_code, --status
+             hst.customer_sbu_code as customer_sbu_code,
+             lkp.CUSTOMER_TP_CODE as customer_type_code,
+             1 as pre_approved_flg ,
+             1 as ret_flg
+        from dm_cad.cad_proposal pr, 
+             (select * from dm.cnf_customer_hst where customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+             and data_date >= '01.01.2020') hst,
+             EDW.PTY_CUSTOMER_TP_LKP lkp,
+             sme_pre_approved_base base
+       where base.application_no = pr.proposal_no
+         and trunc(pr.proposal_end_date)=rec.date_value
+         and pr.party_id = hst.party_id(+) 
+         and trunc(pr.proposal_end_date) = hst.data_date(+)
+         and lkp.CUSTOMER_TP_ID = hst.customer_type_id
+         and hst.customer_sbu_code in ('310', '420', '411', '440', '423', '431', '422', '442')
+         and lkp.CUSTOMER_TP_CODE in ('205','100')
+         and pr.source_system_id = '289';
+        COMMIT;
+    
+    END LOOP;
+
+END;
+
+
+select proposal_end_date,count(*) 
+FROM SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT 
+--where to_char(proposal_end_date,'yyyy')='2021'
+group by proposal_end_date
+
+
+
+SELECT LAST_DAY(PROPOSAL_START_DATE), COUNT(*) AS COUNT
+FROM SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+GROUP BY LAST_DAY(PROPOSAL_START_DATE)
+ORDER BY LAST_DAY(PROPOSAL_START_DATE)
+;
+SELECT LAST_DAY(proposal_end_date), COUNT(*) AS COUNT
+FROM SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+GROUP BY LAST_DAY(proposal_end_date)
+ORDER BY LAST_DAY(proposal_end_date)
+;
+select to_char(PROPOSAL_END_DATE,'YYYYMM'),   COUNT(*) 
+from SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+GROUP BY to_char(PROPOSAL_END_DATE,'YYYYMM')
+;
+select PROPOSAL_END_DATE,   COUNT(*) 
+from SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+GROUP BY PROPOSAL_END_DATE
+;
+
+select to_char(PROPOSAL_END_DATE,'YYYYMM'),  CUSTOMER_SBU_CODE,customer_type_code, COUNT(*) 
+from SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+GROUP BY to_char(PROPOSAL_END_DATE,'YYYYMM'),  CUSTOMER_SBU_CODE,customer_type_code
+
+SELECT * FROM DM.CNF_SBU
+where sbu_code in ('0310', '0420', '0411', '0440', '0423', '0431', '0422', '0442')
+;
+SELECT * FROM EDW.PTY_CUSTOMER_TP_LKP
+where CUSTOMER_TP_CODE in ('205','100')
+
+---Diger basvurular ile union yapilacagi icin aynı kolonlar yaratiliyor---
+ALTER TABLE SME_MNG_RATING_APP_PREAPPROVED_DECLINE_INSERT
+ADD(
+    loan_tp_code VARCHAR2(40) NULL,
+    loan_stat_code VARCHAR2(40) NULL,
+    proposal_tp_code VARCHAR2(40) NULL,
+    proposal_purpose_code VARCHAR2(40) NULL,
+    proposal_stat_code VARCHAR2(40) NULL);
