@@ -1,0 +1,935 @@
+/*GIB'te aktif olmayan müsterilerin tekliflerini isaretleniyor */
+CREATE TABLE SME_MNG_RATING_APP_INSERT_FNL_GIB_FLG   AS
+SELECT A.*,
+CASE WHEN POLICY_RULE_ID IS NOT NULL THEN 1 ELSE 0 END AS GIB_INACTIVE_FLG_NEW
+FROM SME_MNG_RATING_APP_INSERT_FNL A     
+LEFT JOIN (SELECT * FROM EDW.APP_PROPOSAL_POLICY_RULE WHERE POLICY_RULE_ID IN (10874,164,129,590831,278,383)) RL
+ON  A.PROPOSAL_ID = RL.PROPOSAL_ID AND A.PARTY_ID = RL.PARTY_ID
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_APP_INSERT_FNL_GIB_FLG; --46487158
+
+
+
+-------------------------------------------------------------------------------------------------------------
+---------CP basvurularin hepsi BP basvurular ise 3 aylik tarihlerde alinarak kitle olusturulmaktadir---------
+-------------------------------------------------------------------------------------------------------------
+
+/* •  SME_MNG_RATING_APP_INSERT_FNL tablosu basvuru(cp) ve on onayli(bp) basvurularin hic bir kriter uygulanmadan birlesitirildigi tablodur
+   •  on onayli kitlede 3 aylik dönemler secilirken, az sayıda sorgu yapıldığı için 202106 yerine 202105 ve 202409 yerine 202408 tarihi kullanılmıştır*/
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_1 AS
+SELECT 
+PARTY_ID, 
+TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') AS PROPOSAL_END_DATE_YILAY, 
+PROPOSAL_END_DATE, PROPOSAL_ID,
+CASE WHEN PRE_APPROVED_FLG = 1 AND PRE_APPROVED_USED_FLG = 1  THEN 'ONONAYLI_KULLANDIRIM'
+     WHEN PRE_APPROVED_FLG = 1 AND PRE_APPROVED_USED_FLG = 0 AND   RET_FLG = 0 THEN 'ONONAYLI_ONAY'
+     WHEN PRE_APPROVED_FLG= 1  AND PRE_APPROVED_USED_FLG = 0 AND   RET_FLG = 1 THEN 'ONONAYLI_RET'
+     WHEN PRE_APPROVED_FLG = 0 AND RET_FLG = 0 THEN 'BASVURU_ONAY'
+     WHEN PRE_APPROVED_FLG = 0 AND RET_FLG = 1 THEN 'BASVURU_RET'  ELSE '-999999' END AS STATE,
+PRE_APPROVED_FLG 
+FROM SME_MNG_RATING_APP_INSERT_FNL 
+WHERE  PRE_APPROVED_FLG=0 OR
+      (PRE_APPROVED_FLG=1 AND TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') IN ('202103','202105','202109','202112', 
+                                                                      '202203','202206','202209','202212',
+                                                                      '202303','202306','202309','202312',
+                                                                      '202403','202406','202408','202412'));
+                                                     
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_1; --21243230
+
+------------------------------------------------------------------------------------------------------------------
+---------Final Target Kolonu, GIB_INACTIVE_FLG_NEW, CREDIT_CLASSIFICATION_FLG kolonlari olsuturulmaktadir---------
+                      ---------*Asagidaki sorgu EDWSAND ortaminda calistirilmistir.---------
+------------------------------------------------------------------------------------------------------------------
+
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_2_V2 AS
+SELECT  A.*, 
+B.NEXT_12_TARGET_VALUE AS INTERNAL_TARGET,
+C.TARGET_FLG AS BIREYSEL_KKB_TARGET,
+C.ALREADY_TARGET_FLG AS BIREYSEL_KKB_ALREADY_TARGET,
+D.TARGET_FLG AS TICARI_KKB_TARGET,
+D.ALREADY_TARGET_FLG AS TICARI_KKB_ALREADY_TARGET, 
+E.TARGET_FLG AS BIREYSEL_KKB_NON205_TARGET, 
+E.ALREADY_TARGET_FLG AS BIREYSEL_KKB_NON205_ALREADY_TARGET,
+H.INTELLIGENCE_ID,
+trunc(H.INTELLIGENCE_QUERY_DATE) as INTELLIGENCE_QUERY_DATE,
+ 
+CASE WHEN C.ALREADY_TARGET_FLG = 1 OR B.NEXT_12_TARGET_VALUE = 2 OR D.ALREADY_TARGET_FLG = 1 OR E.ALREADY_TARGET_FLG = 1 THEN 2 
+     WHEN B.NEXT_12_TARGET_VALUE = 1 OR C.TARGET_FLG = 1 OR D.TARGET_FLG = 1 OR E.TARGET_FLG = 1 THEN 1
+     WHEN STATE IN ('ONONAYLI_RET','BASVURU_RET') AND (B.NEXT_12_TARGET_VALUE IS NULL OR B.NEXT_12_TARGET_VALUE = 0) AND C.TARGET_FLG IS NULL AND D.TARGET_FLG = 999 AND E.TARGET_FLG IS NULL THEN 999 
+     WHEN B.NEXT_12_TARGET_VALUE IS NULL AND C.TARGET_FLG IS NULL AND D.TARGET_FLG = 999 AND E.TARGET_FLG IS NULL THEN 999
+     ELSE 0 END AS FNL_TARGET_FLG,
+       
+F.CREDIT_CLASSIFICATION_CODE,
+CASE WHEN NVL(F.CREDIT_CLASSIFICATION_CODE, 0) NOT IN (105, 106, 107, 108, 109, 110, 112) THEN 1 ELSE 0 END AS CREDIT_CLASSIFICATION_FLG,
+G.GIB_INACTIVE_FLG_NEW 
+FROM      SME_MNG_RATING_UNQ_STEP_1@edwsand_global_analytics_risk A
+LEFT JOIN SME_MNG_RATING_APP_INSERT_TARGET@edwsand_global_analytics_risk B     ON A.PARTY_ID = B.PARTY_ID AND A.PROPOSAL_ID = B.PROPOSAL_ID 
+LEFT JOIN SME_MNG_RATING_APP_KKB_STEP7@edwsand_global_analytics_risk C         ON  A.PROPOSAL_ID = C.PROPOSAL_ID
+LEFT JOIN SME_COMM_KKB_TARGET_STEP4 D                                          ON A.PARTY_ID = D.PARTY_ID AND A.PROPOSAL_ID = D.PROPOSAL_ID  
+LEFT JOIN SME_COMM_KKB_TARGET_STEP3 H                                          ON A.PARTY_ID = H.PARTY_ID AND A.PROPOSAL_ID = H.PROPOSAL_ID  
+LEFT JOIN SME_MNG_RATING_APP_KKB_440_100_STEP7@edwsand_global_analytics_risk E ON  A.PROPOSAL_ID = E.PROPOSAL_ID
+LEFT JOIN (SELECT PARTY_ID
+                , CREDIT_CLASSIFICATION_DATE
+                , START_DATE
+                , END_DATE
+                , CREDIT_CLASSIFICATION_CODE  
+           FROM EDW.PTY_CUSTOMER_CREDIT_CLSF_HST@edwsand_global_analytics_risk HST
+           LEFT JOIN EDW.PTY_CREDIT_CLASSIFICATION_LKP@edwsand_global_analytics_risk LKP
+           ON HST.CREDIT_CLASSIFICATION_ID = LKP.CREDIT_CLASSIFICATION_ID) F     ON A.PARTY_ID = F.PARTY_ID AND TRUNC(A.PROPOSAL_END_DATE) BETWEEN TRUNC(F.START_DATE) AND TRUNC(F.END_DATE)
+LEFT JOIN SME_MNG_RATING_APP_INSERT_FNL_GIB_FLG@edwsand_global_analytics_risk G  ON A.PARTY_ID = G.PARTY_ID AND A.PROPOSAL_ID = G.PROPOSAL_ID AND A.PROPOSAL_END_DATE = G.PROPOSAL_END_DATE 
+;
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_2_V2@EDWLIVE_GLOBAL_ANALYTICS_RISK; --21243231
+SELECT COUNT(DISTINCT (PROPOSAL_ID)) FROM SME_MNG_RATING_UNQ_STEP_2_V2@EDWLIVE_GLOBAL_ANALYTICS_RISK;--21243230
+
+
+----------------------------------------------Fnl_target_flg null (999) ve already_def (2) gelen----------------------------------------------------- 
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_3_V2 AS 
+SELECT * FROM SME_MNG_RATING_UNQ_STEP_2_V2@EDWLIVE_GLOBAL_ANALYTICS_RISK
+WHERE FNL_TARGET_FLG IN (0,1)
+AND GIB_INACTIVE_FLG_NEW = 0 and CREDIT_CLASSIFICATION_FLG = 1;
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_3_V2; --16,765,132
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------On onayli kitlede yalnizca ret ve fnl_target_flg değeri 0 gelenler üzerinden %10luk kitle alınmıştır. Burada Ön onaylı ret target 0 lar alınırken
+-- ön onaylı target 0 gelen kullandırım,onay,ret lerin toplamı yılay bazlı alınarak ilgili toplamın %10'u kadar fnl_target_flg 0 gelen retler alınmıştır. 
+-----------------------------------------------------Geri kalan caselerin tamamı dahil edilmiştir.-----------------------------------------------------------------------
+
+-------Ön onaylı ret ,target değeri 0 gelen ve intelligence_id bilgisi gelen kitle üzerinde 
+--birden fazla intelligence_id değeri aynı gelen teklifler için en güncel proposal_end_dateli teklifi alınmıştır.
+
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_3_1 AS 
+SELECT *
+FROM (SELECT A.*,
+      ROW_NUMBER() OVER (PARTITION BY A.PARTY_ID, A.INTELLIGENCE_ID ORDER BY A.PROPOSAL_END_DATE DESC ) AS RN
+      FROM SME_MNG_RATING_UNQ_STEP_3_V2 A
+      WHERE STATE = 'ONONAYLI_RET'
+      AND INTELLIGENCE_ID IS NOT NULL
+      and FNL_TARGET_FLG = 0
+)
+WHERE RN=1;
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_3_1; --1,612,278
+
+---- Yukarıda alınmayan kitle ile ilgili elemenin yapıldığı kitlediği birleştirilmiştir. 
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_3_2_V2 AS 
+SELECT 
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_non205_target, 
+ticari_kkb_target, 
+bireysel_kkb_already_target, 
+bireysel_kkb_non205_already_target, 
+ticari_kkb_already_target, 
+intelligence_id, 
+intelligence_query_date, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new
+FROM SME_MNG_RATING_UNQ_STEP_3_1
+UNION ALL
+SELECT party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_non205_target, 
+ticari_kkb_target, 
+bireysel_kkb_already_target, 
+bireysel_kkb_non205_already_target, 
+ticari_kkb_already_target, 
+intelligence_id, 
+intelligence_query_date, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new
+FROM SME_MNG_RATING_UNQ_STEP_3_V2
+WHERE NOT (STATE = 'ONONAYLI_RET'
+      AND INTELLIGENCE_ID IS NOT NULL
+      and FNL_TARGET_FLG = 0)
+
+;
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_3_2_V2; --16,275,903
+
+
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_4_V2 AS
+SELECT 
+  PARTY_ID, PROPOSAL_END_DATE_YILAY, PROPOSAL_END_DATE, PROPOSAL_ID, STATE, PRE_APPROVED_FLG, INTERNAL_TARGET, BIREYSEL_KKB_TARGET, BIREYSEL_KKB_ALREADY_TARGET, TICARI_KKB_TARGET, TICARI_KKB_ALREADY_TARGET, BIREYSEL_KKB_NON205_TARGET, BIREYSEL_KKB_NON205_ALREADY_TARGET, FNL_TARGET_FLG, CREDIT_CLASSIFICATION_CODE, CREDIT_CLASSIFICATION_FLG, GIB_INACTIVE_FLG_NEW,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+FROM (
+    SELECT 
+        B.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY 
+                B.PROPOSAL_END_DATE_YILAY, 
+                CASE WHEN B.STATE = 'ONONAYLI_RET' AND FNL_TARGET_FLG <> 1 THEN 1 ELSE 0 END
+            ORDER BY B.PARTY_ID
+        ) AS RN_IN_GROUP,-- Her grup icin satir numarasi ataniyor (gruplama: yil-ay + ret durumu)
+        ROUND(B.TOTAL_CNT * 0.10) AS TARGET_RET-- her yil-ay grubunun %10'u kadar hedef satir sayisi hesaplaniyor
+    FROM (
+        SELECT 
+            A.*,
+          
+COUNT(CASE 
+         WHEN  FNL_TARGET_FLG = 0
+         THEN 1 
+     END) OVER (PARTITION BY A.PROPOSAL_END_DATE_YILAY) AS TOTAL_CNT-- her yil-ay için toplam kayit sayisi hesaplaniyor
+        FROM SME_MNG_RATING_UNQ_STEP_3_2_V2 A
+        WHERE PRE_APPROVED_FLG = 1 -- Sadece ön onayli kayıtlar dikkate alınıyor
+           ) B
+)
+WHERE 
+    PRE_APPROVED_FLG = 1 -- Ön onaylı kayitlar filtreleniyor
+    AND RN_IN_GROUP <= TARGET_RET AND STATE = 'ONONAYLI_RET' AND FNL_TARGET_FLG <> 1-- Ret durumundaki kayıtlar için %10'luk örneklem alınıyor
+    OR (STATE <> 'ONONAYLI_RET' )    -- Diger durumlar (ret olmayanlar) dogrudan dahil ediliyor
+    OR (STATE = 'ONONAYLI_RET' AND FNL_TARGET_FLG = 1)
+ORDER BY PROPOSAL_END_DATE_YILAY, PARTY_ID;
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_4_V2; --5,957,548
+
+
+-------------------------------------------------------------------------------------------------------
+---------bir önceki islemden sonra on onaylı kitle ile basvuru kitlesi tekrar birlesitiriliyor---------
+-------------------------------------------------------------------------------------------------------
+
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_5_V2 AS
+SELECT party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+
+FROM SME_MNG_RATING_UNQ_STEP_4_v2
+UNION ALL
+SELECT party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+
+FROM SME_MNG_RATING_UNQ_STEP_3_2_V2
+WHERE  PRE_APPROVED_FLG=0 ;   
+ 
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_5_V2; --11905796
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+---------elde edilen flag alanlari üzerinden eleme yapilarak on onayli(bp) ve basvuru(cp) kayitlarinda ilgili yilayda tekillestirme yapiliyor ---------
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+/*•  Bu tekillestirme yapilirken örnegin basvuru(bp) kayitlarinda birden fazla onayli basvurusu varsa, fnl_target_flg 1 öncelikli olacak şekilde, intelligence_idsi en güncel olan bilgisi en güncel yılay ve proposal_id bazlı alınır. */
+--- Burada bir müşteride ilgili yıl ayda birden fazla state bilgisi gelebilir.
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_6_V2 AS
+SELECT * FROM (SELECT  
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE,
+ROW_NUMBER() OVER (PARTITION BY PARTY_ID, proposal_end_date_yilay, STATE  ORDER BY FNL_TARGET_FLG DESC,INTELLIGENCE_ID DESC, proposal_end_date DESC, proposal_id DESC) AS RN2
+FROM SME_MNG_RATING_UNQ_STEP_5_V2
+WHERE pre_approved_flg = 1 
+UNION ALL
+SELECT 
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE,
+ROW_NUMBER() OVER (PARTITION BY PARTY_ID, proposal_end_date_yilay, STATE  ORDER BY FNL_TARGET_FLG DESC,INTELLIGENCE_ID DESC, proposal_end_date DESC, proposal_id DESC) AS RN2
+FROM SME_MNG_RATING_UNQ_STEP_5_V2
+WHERE pre_approved_flg = 0)
+WHERE RN2 = 1; 
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_6_V2; --9,576,113
+
+
+-------------------------------------------
+---------Nihai tablo olusturuluyor---------
+-------------------------------------------
+
+---target kolonuna göre final secim yapilmasi---------------------------------------------------------------------------------------
+--Öncelik CP olacak şekilde seçim yapılmaktadır yoksa bp satırı alınmaktadır ve ilgili seçim yapılırken target=1 ve başvuru için onay, ön onaylı için kullandırım, onay ve ret
+--- sıralaması olacak şekilde alınmaktadır. Örnek olarak;
+--target 1 olan satır öncelikli secilir;
+---- cp'de eger hem onay hem ret target 1 satiri varsa onay satiri alinir yoksa ret satiri alinir
+---- bp'de eger 3 statüdende target 1 satiri varsa önce kullandirim alinir yoksa onay, hiç biri yoksa ret statülü olan satiri alinir
+--target 0 olan satirlar icin;
+---- target 1 olan satir varsa secildi bir üst satirda ve target 0 olan satirlar silindi. 
+---- ama hic target 1 satiri yoksa target 0 satirlari arasinda yukarida oldugu gibi önceliklendirme ile secilir.
+
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_7_V2 AS
+SELECT A.*,
+       
+       CASE WHEN CNT_CP >= 1 AND CNT_BP >= 1 AND PRE_APPROVED_FLG = 0 THEN CASE WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_ONAY' THEN 1
+                                                                                 WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_RET' THEN 2
+                                                                                 WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_ONAY' THEN 3
+                                                                                  WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_RET' THEN 4 ELSE -111 END
+       WHEN CNT_CP >=1  AND CNT_BP = 0 AND PRE_APPROVED_FLG = 0 THEN CASE WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_ONAY' THEN 1
+                                                                                 WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_RET' THEN 2
+                                                                                 WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_ONAY' THEN 3
+                                                                                  WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_RET' THEN 4 ELSE -222 END
+       WHEN CNT_CP = 0 AND CNT_BP >= 1 AND PRE_APPROVED_FLG = 1 THEN CASE WHEN FNL_TARGET_FLG = 1 AND STATE = 'ONONAYLI_KULLANDIRIM' THEN 1
+                                                                                 WHEN FNL_TARGET_FLG = 1 AND STATE =  'ONONAYLI_ONAY' THEN 2
+                                                                                   WHEN FNL_TARGET_FLG = 1 AND STATE = 'ONONAYLI_RET' THEN 3
+                                                                                 WHEN FNL_TARGET_FLG = 0 AND STATE = 'ONONAYLI_KULLANDIRIM' THEN 4
+                                                                                 WHEN FNL_TARGET_FLG = 0 AND STATE =  'ONONAYLI_ONAY' THEN 5
+                                                                                   WHEN FNL_TARGET_FLG = 0 AND STATE = 'ONONAYLI_RET' THEN 6 ELSE -333 END ELSE -444 END AS ADJ_STATE
+
+FROM (
+    SELECT 
+        A.*, 
+ 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new, 
+rn2,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+
+    FROM (
+       
+        SELECT 
+            PARTY_ID,
+            PROPOSAL_END_DATE_YILAY,
+            SUM(CASE WHEN pre_approved_flg = 1 THEN 1 ELSE 0 END) AS CNT_BP,            
+            SUM(CASE WHEN pre_approved_flg = 0 THEN 1 ELSE 0 END) AS CNT_CP
+        FROM SME_MNG_RATING_UNQ_STEP_6_v2
+        GROUP BY PARTY_ID, PROPOSAL_END_DATE_YILAY
+    ) A
+    LEFT JOIN SME_MNG_RATING_UNQ_STEP_6_v2 B
+        ON A.PARTY_ID = B.PARTY_ID 
+        AND A.PROPOSAL_END_DATE_YILAY = B.PROPOSAL_END_DATE_YILAY
+    WHERE 1 = 1 
+)A;
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_7_V2; --9,576,113
+
+
+------------------------------------------------FINAL TABLONUN OLUŞTURULMASI --------------------------------------------------------------------------------------------
+----------------- -444 (Hem cp hem bp gelen başvurularda ön onaylı gelen başvurular) gelen başvuruların elenmesi ve yukardaki açıklamada yazıldığı şekilde ilgili başvurunun alınması---------------------------------------------------------
+
+CREATE  TABLE SME_MNG_RATING_UNQ_FNL_V2 AS
+SELECT * FROM 
+(SELECT A.*,
+ROW_NUMBER() OVER (PARTITION BY PARTY_ID, PROPOSAL_END_DATE_YILAY  ORDER BY ADJ_STATE ASC) AS RN
+FROM SME_MNG_RATING_UNQ_STEP_7_V2 A
+WHERE ADJ_STATE <> -444)
+WHERE RN = 1;
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_FNL_V2;--9.062.414
+
+
+
+GRANT SELECT ON SME_MNG_RATING_UNQ_FNL_V2 TO GLOBAL_RISK_VALIDATION;
+
+GRANT SELECT  ON SME_MNG_RATING_UNQ_FNL_V2 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_7_V2 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_6_V2 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_5_V2 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_4_V2 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_3_V2 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_3_1 TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT  ON SME_MNG_RATING_UNQ_STEP_3_2_V2 TO GLOBAL_RISK_VALIDATION;
+
+# IKINCI DOSYA
+
+/*GIB'te aktif olmayan müsterilerin tekliflerini isaretleniyor */
+CREATE TABLE SME_MNG_RATING_APP_INSERT_FNL_GIB_FLG   AS
+SELECT A.*,
+CASE WHEN POLICY_RULE_ID IS NOT NULL THEN 1 ELSE 0 END AS GIB_INACTIVE_FLG_NEW
+FROM SME_MNG_RATING_APP_INSERT_FNL A     
+LEFT JOIN (SELECT * FROM EDW.APP_PROPOSAL_POLICY_RULE WHERE POLICY_RULE_ID IN (10874,164,129,590831,278,383)) RL
+ON  A.PROPOSAL_ID = RL.PROPOSAL_ID AND A.PARTY_ID = RL.PARTY_ID
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_APP_INSERT_FNL_GIB_FLG; --46487158
+
+
+
+-------------------------------------------------------------------------------------------------------------
+---------CP basvurularin hepsi BP basvurular ise 3 aylik tarihlerde alinarak kitle olusturulmaktadir---------
+-------------------------------------------------------------------------------------------------------------
+
+/* •  SME_MNG_RATING_APP_INSERT_FNL tablosu basvuru(cp) ve on onayli(bp) basvurularin hic bir kriter uygulanmadan birlesitirildigi tablodur
+   •  on onayli kitlede 3 aylik dönemler secilirken, az sayıda sorgu yapıldığı için 202106 yerine 202105 ve 202409 yerine 202408 tarihi kullanılmıştır*/
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_1 AS
+SELECT 
+PARTY_ID, 
+TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') AS PROPOSAL_END_DATE_YILAY, 
+PROPOSAL_END_DATE, PROPOSAL_ID,
+CASE WHEN PRE_APPROVED_FLG = 1 AND PRE_APPROVED_USED_FLG = 1  THEN 'ONONAYLI_KULLANDIRIM'
+     WHEN PRE_APPROVED_FLG = 1 AND PRE_APPROVED_USED_FLG = 0 AND   RET_FLG = 0 THEN 'ONONAYLI_ONAY'
+     WHEN PRE_APPROVED_FLG= 1  AND PRE_APPROVED_USED_FLG = 0 AND   RET_FLG = 1 THEN 'ONONAYLI_RET'
+     WHEN PRE_APPROVED_FLG = 0 AND RET_FLG = 0 THEN 'BASVURU_ONAY'
+     WHEN PRE_APPROVED_FLG = 0 AND RET_FLG = 1 THEN 'BASVURU_RET'  ELSE '-999999' END AS STATE,
+PRE_APPROVED_FLG 
+FROM SME_MNG_RATING_APP_INSERT_FNL 
+WHERE  PRE_APPROVED_FLG=0 OR
+      (PRE_APPROVED_FLG=1 AND TO_CHAR(PROPOSAL_END_DATE,'YYYYMM') IN ('202103','202105','202109','202112', 
+                                                                      '202203','202206','202209','202212',
+                                                                      '202303','202306','202309','202312',
+                                                                      '202403','202406','202408','202412'));
+                                                     
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_1; --21243230
+
+------------------------------------------------------------------------------------------------------------------
+---------Final Target Kolonu, GIB_INACTIVE_FLG_NEW, CREDIT_CLASSIFICATION_FLG kolonlari olsuturulmaktadir---------
+                      ---------*Asagidaki sorgu EDWSAND ortaminda calistirilmistir.---------
+------------------------------------------------------------------------------------------------------------------
+
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_2_6M_30P AS
+SELECT  A.*, 
+B.NEXT_12_TARGET_VALUE AS INTERNAL_TARGET,
+C.TARGET_FLG AS BIREYSEL_KKB_TARGET,
+C.ALREADY_TARGET_FLG AS BIREYSEL_KKB_ALREADY_TARGET,
+D.TARGET_FLG AS TICARI_KKB_TARGET,
+D.ALREADY_TARGET_FLG AS TICARI_KKB_ALREADY_TARGET, 
+E.TARGET_FLG AS BIREYSEL_KKB_NON205_TARGET, 
+E.ALREADY_TARGET_FLG AS BIREYSEL_KKB_NON205_ALREADY_TARGET,
+H.INTELLIGENCE_ID,
+trunc(H.INTELLIGENCE_QUERY_DATE) as INTELLIGENCE_QUERY_DATE,
+CASE WHEN C.ALREADY_TARGET_FLG = 1 OR B.NEXT_6_TARGET_VALUE = 2 OR D.ALREADY_TARGET_FLG = 1 OR E.ALREADY_TARGET_FLG = 1 THEN 2 
+     WHEN B.NEXT_6_TARGET_VALUE = 1 OR C.TARGET_FLG = 1 OR D.TARGET_FLG = 1 OR E.TARGET_FLG = 1 THEN 1
+     WHEN STATE IN ('ONONAYLI_RET','BASVURU_RET') AND (B.NEXT_6_TARGET_VALUE IS NULL OR B.NEXT_6_TARGET_VALUE = 0) AND C.TARGET_FLG IS NULL AND D.TARGET_FLG = 999 AND E.TARGET_FLG IS NULL THEN 999
+     WHEN B.NEXT_6_TARGET_VALUE IS NULL AND C.TARGET_FLG IS NULL AND D.TARGET_FLG = 999 AND E.TARGET_FLG IS NULL THEN 999
+     ELSE 0 END AS FNL_TARGET_FLG,
+F.CREDIT_CLASSIFICATION_CODE,
+CASE WHEN NVL(F.CREDIT_CLASSIFICATION_CODE, 0) NOT IN (105, 106, 107, 108, 109, 110, 112) THEN 1 ELSE 0 END AS CREDIT_CLASSIFICATION_FLG,
+G.GIB_INACTIVE_FLG_NEW 
+FROM      SME_MNG_RATING_UNQ_STEP_1@edwsand_global_analytics_risk A
+LEFT JOIN SME_MNG_RATING_APP_INSERT_TARGET@edwsand_global_analytics_risk B            ON A.PARTY_ID = B.PARTY_ID AND A.PROPOSAL_ID = B.PROPOSAL_ID 
+LEFT JOIN SME_MNG_RATING_APP_KKB_STEP7_6M_30P@edwsand_global_analytics_risk C         ON A.PROPOSAL_ID = C.PROPOSAL_ID
+LEFT JOIN SME_COMM_KKB_TARGET_STEP4_6M_30P D                                          ON A.PARTY_ID = D.PARTY_ID AND A.PROPOSAL_ID = D.PROPOSAL_ID
+LEFT JOIN SME_COMM_KKB_TARGET_STEP3_6M_30P H                                          ON A.PARTY_ID = H.PARTY_ID AND A.PROPOSAL_ID = H.PROPOSAL_ID    
+LEFT JOIN SME_MNG_RATING_APP_KKB_440_100_STEP7_6M_30P@edwsand_global_analytics_risk E ON A.PROPOSAL_ID = E.PROPOSAL_ID
+LEFT JOIN (SELECT PARTY_ID
+                , CREDIT_CLASSIFICATION_DATE
+                , START_DATE
+                , END_DATE
+                , CREDIT_CLASSIFICATION_CODE  
+           FROM EDW.PTY_CUSTOMER_CREDIT_CLSF_HST@edwsand_global_analytics_risk HST
+           LEFT JOIN EDW.PTY_CREDIT_CLASSIFICATION_LKP@edwsand_global_analytics_risk LKP
+           ON HST.CREDIT_CLASSIFICATION_ID = LKP.CREDIT_CLASSIFICATION_ID) F     ON A.PARTY_ID = F.PARTY_ID AND TRUNC(A.PROPOSAL_END_DATE) BETWEEN TRUNC(F.START_DATE) AND TRUNC(F.END_DATE)
+LEFT JOIN SME_MNG_RATING_APP_INSERT_FNL_GIB_FLG@edwsand_global_analytics_risk G  ON A.PARTY_ID = G.PARTY_ID AND A.PROPOSAL_ID = G.PROPOSAL_ID AND A.PROPOSAL_END_DATE = G.PROPOSAL_END_DATE 
+;
+grant select on SME_MNG_RATING_UNQ_STEP_2_V2 to global_risk_validation
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_2_V2@EDWLIVE_GLOBAL_ANALYTICS_RISK; --21.243.231--21.243.231
+SELECT COUNT(DISTINCT (PROPOSAL_ID)) FROM SME_MNG_RATING_UNQ_STEP_2_V2@EDWLIVE_GLOBAL_ANALYTICS_RISK;--21.243.230--21.243.230
+
+SELECT COUNT(*),FNL_TARGET_FLG
+FROM SME_MNG_RATING_UNQ_STEP_2_V2@EDWLIVE_GLOBAL_ANALYTICS_RISK
+group by FNL_TARGET_FLG
+--FNL_TARGET_FLG	COUNT(*)
+--	999	          2875164
+--	1	            963833
+--	2	            530695
+--	0	            16873539
+
+--FNL_TARGET_FLG	COUNT(*)
+--	999	          2905229
+--	1	            963833--ok
+--	2	            530695--ok
+--	0	            16843474
+
+select count(*)
+from GLOBAL_ANALYTICS_RISK.SME_MNG_RATING_UNQ_STEP_2_6M_30P@EDWLIVE_GLOBAL_ANALYTICS_RISK
+where STATE IN ('ONONAYLI_ONAY','BASVURU_ONAY') AND (INTERNAL_TARGET IS NULL) AND BIREYSEL_KKB_TARGET IS NULL AND TICARI_KKB_TARGET = 999 AND BIREYSEL_KKB_NON205_TARGET IS NULL
+and  FNL_TARGET_FLG= 0
+--0 ---ok
+----------------------------------------------Fnl_target_flg null (999) ve already_def (2) gelen----------------------------------------------------- 
+--------------- gibten gelen pasif kayıtların ve CREDIT_CLASSIFICATION_FLG alanındaki kayıtların elenmesi yapılmaktadır.-----------------------------
+
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_3_6M_30P AS 
+SELECT * FROM SME_MNG_RATING_UNQ_STEP_2_6M_30P@EDWLIVE_GLOBAL_ANALYTICS_RISK
+WHERE FNL_TARGET_FLG IN (0,1)
+AND GIB_INACTIVE_FLG_NEW = 0 and CREDIT_CLASSIFICATION_FLG = 1;
+
+SELECT COUNT(*),FNL_TARGET_FLG FROM SME_MNG_RATING_UNQ_STEP_3_6M_30P
+group by FNL_TARGET_FLG
+;
+--FNL_TARGET_FLG	COUNT(*)
+--	1	            1.904.588
+--	0	            14.472.443
+
+--16.377.031
+
+--FNL_TARGET_FLG	COUNT(*)
+--1	               1.904.588--OK
+--0                14.472.443--OK
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------On onayli kitlede yalnizca ret ve fnl_target_flg değeri 0 gelenler üzerinden %10luk kitle alınmıştır. Burada Ön onaylı ret target 0 lar alınırken
+-- ön onaylı target 0 gelen kullandırım,onay,ret lerin toplamı yılay bazlı alınarak ilgili toplamın %10'u kadar fnl_target_flg 0 gelen retler alınmıştır. 
+-----------------------------------------------------Geri kalan caselerin tamamı dahil edilmiştir.-----------------------------------------------------------------------
+
+
+-------Ön onaylı ret ,target değeri 0 gelen ve intelligence_id bilgisi gelen kitle üzerinde 
+--birden fazla intelligence_id değeri aynı gelen teklifler için en güncel proposal_end_dateli teklifi alınmıştır.
+
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_3_1_6M_30P AS 
+SELECT *
+FROM (SELECT A.*,
+      ROW_NUMBER() OVER (PARTITION BY A.PARTY_ID, A.INTELLIGENCE_ID ORDER BY A.PROPOSAL_END_DATE DESC ) AS RN
+      FROM SME_MNG_RATING_UNQ_STEP_3_6M_30P A
+      WHERE STATE = 'ONONAYLI_RET'
+      AND INTELLIGENCE_ID IS NOT NULL
+      and FNL_TARGET_FLG = 0
+)
+WHERE RN=1;
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_3_1_6M_30P;--15.55.017
+
+SELECT COUNT(*)
+FROM SME_MNG_RATING_UNQ_STEP_3_6M_30P A
+WHERE STATE = 'ONONAYLI_RET'
+AND INTELLIGENCE_ID IS NOT NULL
+and FNL_TARGET_FLG = 0;--1.936.053
+
+select 1936053-1555017 from dual --381.036 adet kaydi ön elemede elemis olduk
+;
+create  TABLE SME_MNG_RATING_UNQ_STEP_3_2_6M_30P AS 
+SELECT 
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_non205_target, 
+ticari_kkb_target, 
+bireysel_kkb_already_target, 
+bireysel_kkb_non205_already_target, 
+ticari_kkb_already_target, 
+intelligence_id, 
+intelligence_query_date, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new
+FROM SME_MNG_RATING_UNQ_STEP_3_1_6M_30P
+UNION ALL
+SELECT 
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_non205_target, 
+ticari_kkb_target, 
+bireysel_kkb_already_target, 
+bireysel_kkb_non205_already_target, 
+ticari_kkb_already_target, 
+intelligence_id, 
+intelligence_query_date, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new FROM SME_MNG_RATING_UNQ_STEP_3_6M_30P
+WHERE NOT (STATE = 'ONONAYLI_RET'
+      AND INTELLIGENCE_ID IS NOT NULL
+      and FNL_TARGET_FLG = 0)
+;      
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_3_2_6M_30P;--15.995.995
+
+SELECT COUNT(*),STATE
+FROM SME_MNG_RATING_UNQ_STEP_3_6M_30P
+group by STATE
+--STATE                  COUNT(*)
+--BASVURU_ONAY           2335970
+--BASVURU_RET            3373670
+--ONONAYLI_KULLANDIRIM   147228
+--ONONAYLI_ONAY          4399371
+--ONONAYLI_RET           6120792
+
+--STATE                 COUNT(*)
+--BASVURU_ONAY          2335970
+--BASVURU_RET           3373670
+--ONONAYLI_KULLANDIRIM  147228
+--ONONAYLI_ONAY         4399371
+--ONONAYLI_RET          6120792
+
+
+SELECT COUNT(*),STATE
+FROM SME_MNG_RATING_UNQ_STEP_3_2_6M_30P
+group by STATE;
+--STATE                 COUNT(*)
+--BASVURU_ONAY          2335970--ok
+--BASVURU_RET           3373670--ok
+--ONONAYLI_KULLANDIRIM  147228--ok
+--ONONAYLI_ONAY         4399371--ok
+--ONONAYLI_RET          5739756
+
+select 6120792-5739756 from dual--381.036--ok
+;
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_4_6M_30P AS
+SELECT 
+  PARTY_ID, PROPOSAL_END_DATE_YILAY, PROPOSAL_END_DATE, PROPOSAL_ID, STATE, PRE_APPROVED_FLG, INTERNAL_TARGET, BIREYSEL_KKB_TARGET, BIREYSEL_KKB_ALREADY_TARGET, TICARI_KKB_TARGET, TICARI_KKB_ALREADY_TARGET, BIREYSEL_KKB_NON205_TARGET, BIREYSEL_KKB_NON205_ALREADY_TARGET, FNL_TARGET_FLG, CREDIT_CLASSIFICATION_CODE, CREDIT_CLASSIFICATION_FLG, GIB_INACTIVE_FLG_NEW
+,INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+FROM (
+    SELECT 
+        B.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY 
+                B.PROPOSAL_END_DATE_YILAY, 
+                CASE WHEN B.STATE = 'ONONAYLI_RET' AND FNL_TARGET_FLG <> 1 THEN 1 ELSE 0 END
+            ORDER BY B.PARTY_ID
+        ) AS RN_IN_GROUP,-- Her grup icin satir numarasi ataniyor (gruplama: yil-ay + ret durumu)
+        ROUND(B.TOTAL_CNT * 0.10) AS TARGET_RET-- her yil-ay grubunun %10'u kadar hedef satir sayisi hesaplaniyor
+    FROM (
+        SELECT 
+            A.*,
+          
+COUNT(CASE 
+         WHEN  FNL_TARGET_FLG = 0
+         THEN 1 
+     END) OVER (PARTITION BY A.PROPOSAL_END_DATE_YILAY) AS TOTAL_CNT-- her yil-ay için toplam kayit sayisi hesaplaniyor
+        FROM SME_MNG_RATING_UNQ_STEP_3_2_6M_30P A
+        WHERE PRE_APPROVED_FLG = 1 -- Sadece ön onayli kayıtlar dikkate alınıyor
+           ) B
+)
+WHERE 
+    PRE_APPROVED_FLG = 1 -- Ön onaylı kayitlar filtreleniyor
+    AND RN_IN_GROUP <= TARGET_RET AND STATE = 'ONONAYLI_RET' AND FNL_TARGET_FLG <> 1-- Ret durumundaki kayıtlar için %10'luk örneklem alınıyor
+    OR (STATE <> 'ONONAYLI_RET' )    -- Diger durumlar (ret olmayanlar) dogrudan dahil ediliyor
+    OR (STATE = 'ONONAYLI_RET' AND FNL_TARGET_FLG = 1)
+ORDER BY PROPOSAL_END_DATE_YILAY, PARTY_ID;
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_4_6M_30P;--6.305.936--6.267.833
+
+select 6305936-6267833 from dual--38.103
+-------------------------------------------------------------------------------------------------------
+---------bir önceki islemden sonra on onaylı kitle ile basvuru kitlesi tekrar birlesitiriliyor---------
+-------------------------------------------------------------------------------------------------------
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_5_6M_30P AS
+SELECT party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+FROM SME_MNG_RATING_UNQ_STEP_4_6M_30P
+UNION ALL
+SELECT party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE
+FROM SME_MNG_RATING_UNQ_STEP_3_2_6M_30P
+WHERE  PRE_APPROVED_FLG=0 ;   
+ 
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_5_6M_30P; --12.015.576--11.977.473
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_5_6M_30P where PRE_APPROVED_FLG=1 AND STATE='ONONAYLI_RET';--6.305.936
+--1.759.337--1.721.234
+
+select 1759337-1721234 from dual--38.103
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_5_6M_30P where PRE_APPROVED_FLG=0;--5.709.640--5.709.640
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_3_6M_30P where PRE_APPROVED_FLG=0;--5.709.640--5.709.640
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_4_6M_30P where PRE_APPROVED_FLG=1 AND STATE='ONONAYLI_RET';--6305936--1759337--1721234
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+---------elde edilen flag alanlari üzerinden eleme yapilarak on onayli(bp) ve basvuru(cp) kayitlarinda ilgili yilayda tekillestirme yapiliyor ---------
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+/*•  Bu tekillestirme yapilirken örnegin basvuru(bp) kayitlarinda birden fazla onayli basvurusu varsa, fnl_target_flg 1 öncelikli olacak şekilde en güncel yılay ve proposal_id bazlı alınır. */
+--- Burada bir müşteride ilgili yıl ayda birden fazla state bilgisi gelebilir.
+CREATE  TABLE SME_MNG_RATING_UNQ_STEP_6_6M_30P AS
+SELECT * FROM (SELECT  
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE,
+ROW_NUMBER() OVER (PARTITION BY PARTY_ID, proposal_end_date_yilay, STATE  ORDER BY FNL_TARGET_FLG DESC,INTELLIGENCE_ID DESC, proposal_end_date DESC, proposal_id DESC) AS RN2
+FROM SME_MNG_RATING_UNQ_STEP_5_6M_30P
+WHERE pre_approved_flg = 1 
+UNION ALL
+SELECT 
+party_id, 
+proposal_end_date_yilay, 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new,
+INTELLIGENCE_ID, INTELLIGENCE_QUERY_DATE,
+ROW_NUMBER() OVER (PARTITION BY PARTY_ID, proposal_end_date_yilay, STATE  ORDER BY FNL_TARGET_FLG DESC,INTELLIGENCE_ID DESC, proposal_end_date DESC, proposal_id DESC) AS RN2
+FROM SME_MNG_RATING_UNQ_STEP_5_6M_30P
+WHERE pre_approved_flg = 0)
+WHERE RN2 = 1; 
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_6_6M_30P; --9.691.162--9.677.284
+
+SELECT COUNT(*),pre_approved_flg 
+FROM SME_MNG_RATING_UNQ_STEP_6_6M_30P
+group by pre_approved_flg;
+--COUNT(*)  PRE_APPROVED_FLG
+--5.297.207    1
+--4.393.955    0
+
+--COUNT(*)   PRE_APPROVED_FLG
+--5.283.329   1
+--4.393.955   0
+
+-------------------------------------------
+---------Nihai tablo olusturuluyor---------
+-------------------------------------------
+
+---target kolonuna göre final secim yapilmasi---------------------------------------------------------------------------------------
+--Öncelik CP olacak şekilde seçim yapılmaktadır yoksa bp satırı alınmaktadır ve ilgili seçim yapılırken target=1 ve başvuru için onay, ön onaylı için kullandırım, onay ve ret
+--- sıralaması olacak şekilde alınmaktadır. Örnek olarak;
+--target 1 olan satır öncelikli secilir;
+---- cp'de eger hem onay hem ret target 1 satiri varsa onay satiri alinir yoksa ret satiri alinir
+---- bp'de eger 3 statüdende target 1 satiri varsa önce kullandirim alinir yoksa onay, hiç biri yoksa ret statülü olan satiri alinir
+--target 0 olan satirlar icin;
+---- target 1 olan satir varsa secildi bir üst satirda ve target 0 olan satirlar silindi. 
+---- ama hic target 1 satiri yoksa target 0 satirlari arasinda yukarida oldugu gibi önceliklendirme ile secilir.
+
+CREATE TABLE SME_MNG_RATING_UNQ_STEP_7_6M_30P AS
+SELECT A.*,
+       
+       CASE WHEN CNT_CP >= 1 AND CNT_BP >= 1 AND PRE_APPROVED_FLG = 0 THEN CASE WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_ONAY' THEN 1
+                                                                                WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_RET' THEN 2
+                                                                                WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_ONAY' THEN 3
+                                                                                WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_RET' THEN 4 ELSE -111 END
+       WHEN CNT_CP >=1  AND CNT_BP = 0 AND PRE_APPROVED_FLG = 0 THEN CASE WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_ONAY' THEN 1
+                                                                          WHEN FNL_TARGET_FLG = 1 AND STATE = 'BASVURU_RET' THEN 2
+                                                                          WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_ONAY' THEN 3
+                                                                          WHEN FNL_TARGET_FLG = 0 AND STATE = 'BASVURU_RET' THEN 4 ELSE -222 END
+       WHEN CNT_CP = 0 AND CNT_BP >= 1 AND PRE_APPROVED_FLG = 1 THEN CASE WHEN FNL_TARGET_FLG = 1 AND STATE = 'ONONAYLI_KULLANDIRIM' THEN 1
+                                                                          WHEN FNL_TARGET_FLG = 1 AND STATE =  'ONONAYLI_ONAY' THEN 2
+                                                                          WHEN FNL_TARGET_FLG = 1 AND STATE = 'ONONAYLI_RET' THEN 3
+                                                                          WHEN FNL_TARGET_FLG = 0 AND STATE = 'ONONAYLI_KULLANDIRIM' THEN 4
+                                                                          WHEN FNL_TARGET_FLG = 0 AND STATE =  'ONONAYLI_ONAY' THEN 5
+                                                                           WHEN FNL_TARGET_FLG = 0 AND STATE = 'ONONAYLI_RET' THEN 6 ELSE -333 END ELSE -444 END AS ADJ_STATE
+
+FROM (
+    SELECT 
+        A.*, 
+ 
+proposal_end_date, 
+proposal_id, 
+state, 
+pre_approved_flg, 
+internal_target, 
+bireysel_kkb_target, 
+bireysel_kkb_already_target, 
+ticari_kkb_target, 
+ticari_kkb_already_target, 
+bireysel_kkb_non205_target, 
+bireysel_kkb_non205_already_target, 
+fnl_target_flg, 
+credit_classification_code, 
+credit_classification_flg, 
+gib_inactive_flg_new, 
+rn2
+
+    FROM (
+       
+        SELECT 
+            PARTY_ID,
+            PROPOSAL_END_DATE_YILAY,
+            SUM(CASE WHEN pre_approved_flg = 1 THEN 1 ELSE 0 END) AS CNT_BP,            
+            SUM(CASE WHEN pre_approved_flg = 0 THEN 1 ELSE 0 END) AS CNT_CP
+        FROM SME_MNG_RATING_UNQ_STEP_6_6M_30P
+        GROUP BY PARTY_ID, PROPOSAL_END_DATE_YILAY
+    ) A
+    LEFT JOIN SME_MNG_RATING_UNQ_STEP_6_6M_30P B
+        ON A.PARTY_ID = B.PARTY_ID 
+        AND A.PROPOSAL_END_DATE_YILAY = B.PROPOSAL_END_DATE_YILAY
+    WHERE 1 = 1 
+)A;
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_STEP_7_6M_30P;--9.691.162--9.677.284
+
+
+------------------------------------------------FINAL TABLONUN OLUŞTURULMASI --------------------------------------------------------------------------------------------
+----------------- -444 (Hem cp hem bp gelen başvurularda ön onaylı gelen başvurular) gelen başvuruların elenmesi ve yukardaki açıklamada yazıldığı şekilde ilgili başvurunun alınması---------------------------------------------------------
+
+CREATE  TABLE SME_MNG_RATING_UNQ_FNL_6M_30P AS
+SELECT * FROM 
+(SELECT A.*,
+ROW_NUMBER() OVER (PARTITION BY PARTY_ID, PROPOSAL_END_DATE_YILAY  ORDER BY ADJ_STATE ASC) AS RN
+FROM SME_MNG_RATING_UNQ_STEP_7_6M_30P A
+WHERE ADJ_STATE <> -444)
+WHERE RN = 1;
+
+SELECT ADJ_STATE,COUNT(*)
+FROM SME_MNG_RATING_UNQ_STEP_7_6M_30P A
+GROUP BY ADJ_STATE;
+--ADJ_STATE  COUNT(*)
+-- 6         815764
+-- 1         198113
+-- 2         563981
+-- 5         3252936
+-- 4         1978017
+-- 3         2552568
+-- -444      315905
+
+
+SELECT COUNT(*) FROM SME_MNG_RATING_UNQ_FNL_6M_30P; --9.130.576--9118361
+
+SELECT 9130576-9118361 FROM DUAL--12.215 adet kayit icin bu güncelleme yapilmis oldu
+
+SELECT COUNT(*), PARTY_ID, PROPOSAL_END_DATE_YILAY FROM SME_MNG_RATING_UNQ_FNL_6M_30P
+GROUP BY PARTY_ID, PROPOSAL_END_DATE_YILAY
+HAVING COUNT(*) > 1;
+
+GRANT SELECT ON SME_MNG_RATING_UNQ_FNL_6M_30P TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT ON SME_MNG_RATING_UNQ_STEP_7_6M_30P TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT ON SME_MNG_RATING_UNQ_STEP_6_6M_30P TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT ON SME_MNG_RATING_UNQ_STEP_5_6M_30P TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT ON SME_MNG_RATING_UNQ_STEP_4_6M_30P TO GLOBAL_RISK_VALIDATION;
+GRANT SELECT ON SME_MNG_RATING_UNQ_STEP_3_6M_30P TO GLOBAL_RISK_VALIDATION;
+
+
